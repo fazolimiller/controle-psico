@@ -86,7 +86,8 @@ export async function POST(req: NextRequest) {
       observacoes || null,
       session?.userId ?? null,
       session?.nome ?? null,
-    ]
+    ],
+    { returningId: true }
   );
 
   const novaLinha = await query('SELECT * FROM dispensacoes WHERE id = ?', [Number(result.lastInsertRowid)]);

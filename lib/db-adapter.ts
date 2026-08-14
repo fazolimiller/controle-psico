@@ -40,14 +40,14 @@ export interface RunResult {
 
 export async function run(
   sqliteQuery: string,
-  params: (string | number | null)[] = []
+  params: (string | number | null)[] = [],
+  options: { returningId?: boolean } = {}
 ): Promise<RunResult> {
   if (usePostgres) {
     const { getPg } = await import('./db-postgres');
     const pool = await getPg();
     let pgQuery = toPgQuery(sqliteQuery);
-    const isInsert = /^\s*INSERT/i.test(pgQuery);
-    if (isInsert && !/RETURNING/i.test(pgQuery)) {
+    if (options.returningId && !/RETURNING/i.test(pgQuery)) {
       pgQuery += ' RETURNING id';
     }
     const result = await pool.query(pgQuery, params);

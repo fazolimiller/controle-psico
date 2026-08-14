@@ -70,7 +70,8 @@ export async function criarUsuario(
   const hash = await bcrypt.hash(senha, 10);
   const result = await run(
     `INSERT INTO usuarios (login, nome, senha_hash, papel, ativo) VALUES (?, ?, ?, ?, 1)`,
-    [login, nome, hash, papel]
+    [login, nome, hash, papel],
+    { returningId: true }
   );
   const novo = await query<Usuario>('SELECT * FROM usuarios WHERE id = ?', [Number(result.lastInsertRowid)]);
   const { senha_hash: _senha_hash, ...publico } = novo[0];
