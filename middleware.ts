@@ -46,6 +46,12 @@ async function verifyToken(token: string): Promise<SessionData | null> {
   }
 }
 
+// Extensões de arquivo estático que vivem em /public e devem ser sempre
+// acessíveis, mesmo sem login — ex: a logo na tela de login. Nenhum dado da
+// farmácia é servido com essas extensões (tudo passa por rotas /api em JSON),
+// então essa liberação é segura.
+const EXTENSAO_ARQUIVO_PUBLICO = /\.(png|jpe?g|svg|webp|gif|ico|avif)$/i;
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -53,7 +59,8 @@ export async function middleware(req: NextRequest) {
     pathname === '/login' ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/_next') ||
-    pathname.startsWith('/favicon');
+    pathname.startsWith('/favicon') ||
+    EXTENSAO_ARQUIVO_PUBLICO.test(pathname);
 
   if (isPublic) {
     return NextResponse.next();

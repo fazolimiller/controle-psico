@@ -1,17 +1,19 @@
 # Controle de Psicotrópicos — Farmácia
 
-Sistema interno para controle de dispensação de caixas de psicotrópicos na farmácia hospitalar: registro de entrega/devolução por anestesista, código de caixa e atendimento do paciente, com histórico permanente, controle de usuários e relatórios.
+Sistema interno para controle de dispensação de caixas de psicotrópicos na farmácia hospitalar: registro de entrega/devolução por anestesista, código de caixa e aviso cirúrgico, com histórico permanente, controle de usuários e relatórios.
 
 ## O que o sistema faz
 
 - **Tela do dia**: tabela com todas as dispensações do dia, com formulário rápido de registro (campo do crachá com foco automático, pronto para o leitor infravermelho).
 - **Leitor de crachá do anestesista**: como o leitor emula teclado (HID), basta o campo estar em foco — a leitura cai direto no campo, sem hardware adicional ou driver. O nome do anestesista aparece automaticamente assim que o crachá é reconhecido.
+- **Anestesista precisa estar cadastrado**: se o crachá lido não corresponder a um anestesista vinculado em Administração → Anestesistas, o sistema **bloqueia o registro** da dispensação até que um administrador faça esse cadastro. Isso garante que nenhuma caixa saia da farmácia sem se saber para quem foi.
 - **Devolução**: um clique registra o horário de devolução da caixa.
+- **Horários em fuso de Brasília**: todos os horários exibidos (tela do dia e relatórios) são convertidos para GMT-3, no formato `17/08/2026 - 15:35`.
 - **Usuários com login individual**: cada funcionário da farmácia tem seu próprio usuário/senha. Toda entrega e devolução fica associada a quem a registrou.
 - **Dois níveis de acesso**:
   - **Funcionário**: registra entregas e devoluções. Não pode corrigir nem excluir registros já salvos.
   - **Administrador**: além de tudo que o funcionário faz, pode corrigir qualquer campo (com histórico completo de quem alterou o quê), excluir registros de verdade, cadastrar/editar o vínculo crachá→nome dos anestesistas, e criar/gerenciar os logins da equipe.
-- **Relatórios**: por anestesista (quantas caixas, quantas em posse), por paciente (histórico de atendimento), por caixa (movimentações), e lista de pendências (caixas ainda não devolvidas). Exportação em CSV.
+- **Relatórios**: lista todas as dispensações do período selecionado (data De/Até), com caixa, anestesista, aviso cirúrgico, horário de dispensação e devolução, funcionário responsável e status (em posse / devolvida). Exportação em CSV com as mesmas colunas.
 
 ## Rodando localmente
 

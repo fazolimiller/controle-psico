@@ -16,7 +16,12 @@ export async function GET(req: NextRequest) {
 
   let sql = 'SELECT * FROM dispensacoes WHERE 1=1';
   const params: (string | number)[] = [];
-  const dateCol = isUsingPostgres() ? "horario_entrega::date" : "date(horario_entrega)";
+  // Os horários são gravados em UTC; o Brasil está fixo em UTC-3 (sem horário de
+  // verão desde 2019), então subtraímos 3 horas antes de extrair a data civil —
+  // assim uma entrega às 23h (Brasília) continua contando como "hoje", não amanhã.
+  const dateCol = isUsingPostgres()
+    ? "(horario_entrega - interval '3 hours')::date"
+    : "date(horario_entrega, '-3 hours')";
 
   if (data) {
     sql += ` AND ${dateCol} = ?`;
@@ -61,15 +66,25 @@ export async function POST(req: NextRequest) {
 
   if (!codigo_anestesista || !codigo_caixa || !codigo_atendimento_paciente) {
     return NextResponse.json(
-      { error: 'Código do anestesista, código da caixa e código de atendimento são obrigatórios.' },
+      { error: 'Código do anestesista, código da caixa e código do aviso cirúrgico são obrigatórios.' },
       { status: 400 }
     );
   }
 
-  const anestesista = await query<{ nome: string }>(
-    'SELECT nome FROM anestesistas WHERE codigo_cracha = ?',
+  const anestesista = await query<{ nome: string; ativo: number }>(
+    'SELECT nome, ativo FROM anestesistas WHERE codigo_cracha = ?',
     [codigo_anestesista]
   );
+
+  if (anestesista.length === 0 || !anestesista[0].ativo) {
+    return NextResponse.json(
+      {
+        error:
+          'Anestesista não cadastrado. Peça a um administrador para vincular este crachá em Administração → Anestesistas antes de dispensar a caixa.',
+      },
+      { status: 422 }
+    );
+  }
 
   const horarioFinal = horario_entrega || new Date().toISOString().slice(0, 19).replace('T', ' ');
 
@@ -79,7 +94,7 @@ export async function POST(req: NextRequest) {
      VALUES (?, ?, ?, ?, ?, ?, 'em_posse', ?, ?)`,
     [
       codigo_anestesista,
-      anestesista[0]?.nome || null,
+      anestesista[0].nome,
       codigo_caixa,
       codigo_atendimento_paciente,
       horarioFinal,

@@ -7,11 +7,7 @@ import FormularioEntrega from '@/components/FormularioEntrega';
 import TabelaDispensacoes from '@/components/TabelaDispensacoes';
 import { Dispensacao } from '@/lib/types';
 import { useSessao } from '@/lib/useSessao';
-
-function hojeISO(): string {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
-}
+import { hojeLocalISO } from '@/lib/formatarData';
 
 function formatarDataExtenso(dataISO: string): string {
   const [ano, mes, dia] = dataISO.split('-').map(Number);
@@ -20,7 +16,7 @@ function formatarDataExtenso(dataISO: string): string {
 }
 
 export default function HomePage() {
-  const [data, setData] = useState(hojeISO());
+  const [data, setData] = useState(hojeLocalISO());
   const [dispensacoes, setDispensacoes] = useState<Dispensacao[]>([]);
   const [carregando, setCarregando] = useState(true);
   const router = useRouter();
@@ -46,7 +42,7 @@ export default function HomePage() {
   }
 
   const pendentes = dispensacoes.filter((d) => d.status === 'em_posse').length;
-  const ehHoje = data === hojeISO();
+  const ehHoje = data === hojeLocalISO();
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
@@ -59,7 +55,7 @@ export default function HomePage() {
             <h1 className="font-display text-xl" style={{ color: 'var(--ink)' }}>
               Controle de Psicotrópicos
             </h1>
-            <p className="text-xs" style={{ color: 'var(--ink-soft)' }}>Farmácia hospitalar</p>
+            <p className="text-xs" style={{ color: 'var(--ink-soft)' }}>Farmácia - Santa Casa de São José dos Campos</p>
           </div>
           <nav className="flex items-center gap-4">
             <Link
@@ -112,7 +108,7 @@ export default function HomePage() {
             />
             {!ehHoje && (
               <button
-                onClick={() => setData(hojeISO())}
+                onClick={() => setData(hojeLocalISO())}
                 className="text-sm font-medium px-3 py-2 rounded-lg"
                 style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
               >

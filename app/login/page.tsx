@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 export default function LoginPage() {
   const [login, setLogin] = useState('');
@@ -42,19 +43,19 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'var(--bg)' }}>
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div
-            className="inline-flex items-center justify-center w-12 h-12 rounded-full mb-4"
-            style={{ background: 'var(--accent-soft)' }}
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2">
-              <path d="M12 2L4 6v6c0 5.5 3.8 9.7 8 11 4.2-1.3 8-5.5 8-11V6l-8-4z" />
-            </svg>
-          </div>
+          <Image
+            src="/logo-santa-casa.png"
+            alt="Santa Casa de São José dos Campos"
+            width={1579}
+            height={1045}
+            priority
+            className="mx-auto mb-5 h-auto w-full max-w-[240px]"
+          />
           <h1 className="font-display text-2xl" style={{ color: 'var(--ink)' }}>
             Controle de Psicotrópicos
           </h1>
           <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>
-            Farmácia — acesso restrito
+            Farmácia - Santa Casa de São José dos Campos
           </p>
         </div>
 

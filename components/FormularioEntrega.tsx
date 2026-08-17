@@ -28,7 +28,11 @@ export default function FormularioEntrega({ onSucesso }: Props) {
       .catch(() => {});
   }, []);
 
-  const nomeResolvido = anestesistas.find((a) => a.codigo_cracha === codigoAnestesista.trim())?.nome;
+  const anestesistaEncontrado = anestesistas.find(
+    (a) => a.codigo_cracha === codigoAnestesista.trim() && a.ativo
+  );
+  const crachaDigitado = codigoAnestesista.trim().length > 0;
+  const crachaNaoCadastrado = crachaDigitado && !anestesistaEncontrado;
 
   function handleCrachaChange(valor: string) {
     setCodigoAnestesista(valor);
@@ -67,6 +71,13 @@ export default function FormularioEntrega({ onSucesso }: Props) {
       return;
     }
 
+    if (!anestesistaEncontrado) {
+      setErro(
+        'Este crachá não está cadastrado. Peça a um administrador para vincular o anestesista em Administração → Anestesistas antes de dispensar a caixa.'
+      );
+      return;
+    }
+
     setEnviando(true);
     try {
       const res = await fetch('/api/dispensacoes', {
@@ -98,6 +109,8 @@ export default function FormularioEntrega({ onSucesso }: Props) {
     }
   }
 
+  const podeEnviar = !enviando && crachaDigitado && !!anestesistaEncontrado;
+
   return (
     <form
       onSubmit={handleSubmit}
@@ -124,12 +137,16 @@ export default function FormularioEntrega({ onSucesso }: Props) {
               placeholder="Aproxime o crachá do leitor"
               className="font-mono w-full rounded-lg border-2 px-3 py-3 text-base"
               style={{
-                borderColor: crachaLido ? 'var(--accent)' : 'var(--line)',
-                background: crachaLido ? 'var(--accent-soft)' : 'var(--bg)',
+                borderColor: crachaNaoCadastrado ? 'var(--red)' : anestesistaEncontrado ? 'var(--accent)' : 'var(--line)',
+                background: crachaNaoCadastrado
+                  ? 'var(--red-soft)'
+                  : anestesistaEncontrado
+                    ? 'var(--accent-soft)'
+                    : 'var(--bg)',
               }}
               autoComplete="off"
             />
-            {crachaLido && (
+            {crachaLido && anestesistaEncontrado && (
               <span
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold"
                 style={{ color: 'var(--accent)' }}
@@ -138,9 +155,13 @@ export default function FormularioEntrega({ onSucesso }: Props) {
               </span>
             )}
           </div>
-          <p className="text-xs mt-1.5 h-4" style={{ color: nomeResolvido ? 'var(--accent)' : 'var(--ink-soft)' }}>
-            {codigoAnestesista.trim()
-              ? nomeResolvido || 'Crachá não cadastrado — será registrado só o código'
+          <p
+            className="text-xs mt-1.5 min-h-4"
+            style={{ color: crachaNaoCadastrado ? 'var(--red)' : anestesistaEncontrado ? 'var(--accent)' : 'var(--ink-soft)' }}
+          >
+            {crachaDigitado
+              ? anestesistaEncontrado?.nome ||
+                'Crachá não cadastrado — peça a um admin para vincular antes de dispensar'
               : ''}
           </p>
         </div>
@@ -164,14 +185,14 @@ export default function FormularioEntrega({ onSucesso }: Props) {
 
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--ink-soft)' }}>
-            Atendimento do paciente
+            Aviso Cirúrgico
           </label>
           <input
             ref={pacienteRef}
             type="text"
             value={codigoPaciente}
             onChange={(e) => setCodigoPaciente(e.target.value)}
-            placeholder="Código de atendimento"
+            placeholder="Código do aviso cirúrgico"
             className="font-mono w-full rounded-lg border px-3 py-3 text-base"
             style={{ borderColor: 'var(--line)', background: 'var(--bg)' }}
             autoComplete="off"
@@ -191,7 +212,7 @@ export default function FormularioEntrega({ onSucesso }: Props) {
         </p>
         <button
           type="submit"
-          disabled={enviando}
+          disabled={!podeEnviar}
           className="rounded-lg px-5 py-2.5 font-medium text-white disabled:opacity-50 transition-opacity"
           style={{ background: 'var(--accent)' }}
         >
