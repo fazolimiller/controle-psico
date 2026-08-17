@@ -22,12 +22,41 @@ function formatarDataCalendario(dataISO: string): string {
   return `${dia}/${mes}/${ano}`;
 }
 
+const CABECALHOS = [
+  'Caixa',
+  'Setor',
+  'Código Anestesista',
+  'Nome Anestesista',
+  'Atendimento',
+  'Horário Dispensação',
+  'Horário Devolução',
+  'Registrado por',
+  'Devolvido por',
+  'Status',
+];
+
+function linhaParaExportacao(d: Dispensacao): string[] {
+  return [
+    d.codigo_caixa,
+    d.setor_nome || '',
+    d.codigo_anestesista,
+    d.nome_anestesista || '',
+    d.codigo_atendimento_paciente,
+    formatarDataHoraBR(d.horario_entrega),
+    formatarDataHoraBR(d.horario_devolucao),
+    d.registrado_por_nome || '',
+    d.devolvido_por_nome || '',
+    d.status === 'em_posse' ? 'Em posse' : 'Devolvida',
+  ];
+}
+
 export default function RelatoriosPage() {
   const [dataInicio, setDataInicio] = useState(primeiroDiaDoMes());
   const [dataFim, setDataFim] = useState(hojeLocalISO());
   const [busca, setBusca] = useState('');
   const [dispensacoes, setDispensacoes] = useState<Dispensacao[]>([]);
   const [carregando, setCarregando] = useState(true);
+  const [exportandoXlsx, setExportandoXlsx] = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -47,6 +76,7 @@ export default function RelatoriosPage() {
     ? dispensacoes.filter((d) =>
         [
           d.codigo_caixa,
+          d.setor_nome,
           d.codigo_anestesista,
           d.nome_anestesista,
           d.codigo_atendimento_paciente,
@@ -62,31 +92,9 @@ export default function RelatoriosPage() {
   function exportarCSV() {
     if (linhasFiltradas.length === 0) return;
 
-    const headers = [
-      'Caixa',
-      'Código Anestesista',
-      'Nome Anestesista',
-      'Aviso Cirúrgico',
-      'Horário Dispensação',
-      'Horário Devolução',
-      'Registrado por',
-      'Devolvido por',
-      'Status',
-    ];
+    const linhas = linhasFiltradas.map(linhaParaExportacao);
 
-    const linhas = linhasFiltradas.map((d) => [
-      d.codigo_caixa,
-      d.codigo_anestesista,
-      d.nome_anestesista || '',
-      d.codigo_atendimento_paciente,
-      formatarDataHoraBR(d.horario_entrega),
-      formatarDataHoraBR(d.horario_devolucao),
-      d.registrado_por_nome || '',
-      d.devolvido_por_nome || '',
-      d.status === 'em_posse' ? 'Em posse' : 'Devolvida',
-    ]);
-
-    const csvRows = [headers, ...linhas].map((linha) =>
+    const csvRows = [CABECALHOS, ...linhas].map((linha) =>
       linha.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')
     );
     // BOM no início ajuda o Excel a reconhecer acentos corretamente
@@ -97,6 +105,21 @@ export default function RelatoriosPage() {
     a.download = `relatorio-dispensacoes-${dataInicio || 'inicio'}-a-${dataFim || 'fim'}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function exportarXLSX() {
+    if (linhasFiltradas.length === 0) return;
+    setExportandoXlsx(true);
+    try {
+      const writeExcelFile = (await import('write-excel-file/browser')).default;
+      const linhas = linhasFiltradas.map(linhaParaExportacao);
+      const sheetData = [CABECALHOS, ...linhas];
+      await writeExcelFile(sheetData).toFile(
+        `relatorio-dispensacoes-${dataInicio || 'inicio'}-a-${dataFim || 'fim'}.xlsx`
+      );
+    } finally {
+      setExportandoXlsx(false);
+    }
   }
 
   return (
@@ -158,19 +181,29 @@ export default function RelatoriosPage() {
               type="text"
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Caixa, anestesista, aviso cirúrgico, funcionário…"
+              placeholder="Caixa, setor, anestesista, atendimento, funcionário…"
               className="w-full rounded-lg border px-3 py-2 text-sm"
               style={{ borderColor: 'var(--line)' }}
             />
           </div>
-          <button
-            onClick={exportarCSV}
-            disabled={linhasFiltradas.length === 0}
-            className="text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-40"
-            style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
-          >
-            Exportar CSV
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={exportarCSV}
+              disabled={linhasFiltradas.length === 0}
+              className="text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-40 whitespace-nowrap"
+              style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
+            >
+              Exportar CSV
+            </button>
+            <button
+              onClick={exportarXLSX}
+              disabled={linhasFiltradas.length === 0 || exportandoXlsx}
+              className="text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-40 whitespace-nowrap"
+              style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
+            >
+              {exportandoXlsx ? 'Gerando…' : 'Exportar Excel'}
+            </button>
+          </div>
         </div>
 
         {carregando ? (
@@ -189,8 +222,9 @@ export default function RelatoriosPage() {
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--line)' }}>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Caixa</th>
+                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Setor</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Anestesista</th>
-                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Aviso Cirúrgico</th>
+                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Atendimento</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Dispensação</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Devolução</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Funcionário</th>
@@ -201,6 +235,7 @@ export default function RelatoriosPage() {
                   {linhasFiltradas.map((d) => (
                     <tr key={d.id} style={{ borderBottom: '1px solid var(--line)' }}>
                       <td className="px-4 py-3 font-mono">{d.codigo_caixa}</td>
+                      <td className="px-4 py-3">{d.setor_nome || '—'}</td>
                       <td className="px-4 py-3 font-mono">
                         <div>{d.codigo_anestesista}</div>
                         {d.nome_anestesista && (

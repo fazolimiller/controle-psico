@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import FormularioEntrega from '@/components/FormularioEntrega';
 import TabelaDispensacoes from '@/components/TabelaDispensacoes';
-import { Dispensacao } from '@/lib/types';
+import { Dispensacao, Setor } from '@/lib/types';
 import { useSessao } from '@/lib/useSessao';
 import { hojeLocalISO } from '@/lib/formatarData';
 
@@ -19,17 +19,37 @@ export default function HomePage() {
   const [data, setData] = useState(hojeLocalISO());
   const [dispensacoes, setDispensacoes] = useState<Dispensacao[]>([]);
   const [carregando, setCarregando] = useState(true);
+  const [setores, setSetores] = useState<Setor[]>([]);
+  const [setoresCarregados, setSetoresCarregados] = useState(false);
+  const [setorAtualId, setSetorAtualId] = useState<number | null>(null);
   const router = useRouter();
   const { sessao, isAdmin } = useSessao();
 
+  // Carrega os setores (abas) uma vez, e seleciona o primeiro por padrão
+  useEffect(() => {
+    fetch('/api/setores')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((lista: Setor[]) => {
+        setSetores(lista);
+        setSetorAtualId((atual) => atual ?? lista[0]?.id ?? null);
+        setSetoresCarregados(true);
+      })
+      .catch(() => setSetoresCarregados(true));
+  }, []);
+
   const carregar = useCallback(async () => {
+    if (setorAtualId === null) {
+      setCarregando(false);
+      setDispensacoes([]);
+      return;
+    }
     setCarregando(true);
-    const res = await fetch(`/api/dispensacoes?data=${data}`);
+    const res = await fetch(`/api/dispensacoes?data=${data}&setorId=${setorAtualId}`);
     if (res.ok) {
       setDispensacoes(await res.json());
     }
     setCarregando(false);
-  }, [data]);
+  }, [data, setorAtualId]);
 
   useEffect(() => {
     carregar();
@@ -43,6 +63,7 @@ export default function HomePage() {
 
   const pendentes = dispensacoes.filter((d) => d.status === 'em_posse').length;
   const ehHoje = data === hojeLocalISO();
+  const setorAtual = setores.find((s) => s.id === setorAtualId) || null;
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
@@ -84,48 +105,89 @@ export default function HomePage() {
             </button>
           </nav>
         </div>
+
+        {/* Abas de setor — visíveis para todos os usuários logados */}
+        {setores.length > 0 && (
+          <div className="max-w-6xl mx-auto px-4 md:px-6 flex gap-1 overflow-x-auto">
+            {setores.map((setor) => {
+              const ativo = setor.id === setorAtualId;
+              return (
+                <button
+                  key={setor.id}
+                  onClick={() => setSetorAtualId(setor.id)}
+                  className="px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors"
+                  style={
+                    ativo
+                      ? { borderColor: 'var(--accent)', color: 'var(--accent)' }
+                      : { borderColor: 'transparent', color: 'var(--ink-soft)' }
+                  }
+                >
+                  {setor.nome}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </header>
 
       <main className="max-w-6xl mx-auto px-4 md:px-6 py-6 flex flex-col gap-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="font-display text-2xl capitalize" style={{ color: 'var(--ink)' }}>
-              {formatarDataExtenso(data)}
-            </h2>
-            {pendentes > 0 && (
-              <p className="text-sm mt-0.5" style={{ color: 'var(--amber)' }}>
-                {pendentes} {pendentes === 1 ? 'caixa em posse' : 'caixas em posse'} aguardando devolução
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={data}
-              onChange={(e) => setData(e.target.value)}
-              className="rounded-lg border px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--line)', background: 'var(--bg-panel)' }}
-            />
-            {!ehHoje && (
-              <button
-                onClick={() => setData(hojeLocalISO())}
-                className="text-sm font-medium px-3 py-2 rounded-lg"
-                style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
-              >
-                Voltar para hoje
-              </button>
-            )}
-          </div>
-        </div>
-
-        {ehHoje && <FormularioEntrega onSucesso={carregar} />}
-
-        {carregando ? (
-          <div className="text-center py-12 text-sm" style={{ color: 'var(--ink-soft)' }}>
-            Carregando…
+        {setoresCarregados && setores.length === 0 ? (
+          <div
+            className="rounded-2xl border p-10 text-center"
+            style={{ background: 'var(--bg-panel)', borderColor: 'var(--line)' }}
+          >
+            <p className="font-display text-lg" style={{ color: 'var(--ink)' }}>
+              Nenhum setor cadastrado
+            </p>
+            <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>
+              {isAdmin
+                ? 'Cadastre ao menos um setor em Administração → Setores para começar a registrar dispensações.'
+                : 'Peça a um administrador para cadastrar os setores em Administração → Setores.'}
+            </p>
           </div>
         ) : (
-          <TabelaDispensacoes dispensacoes={dispensacoes} onAtualizar={carregar} isAdmin={isAdmin} />
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-display text-2xl capitalize" style={{ color: 'var(--ink)' }}>
+                  {formatarDataExtenso(data)}
+                </h2>
+                {pendentes > 0 && (
+                  <p className="text-sm mt-0.5" style={{ color: 'var(--amber)' }}>
+                    {pendentes} {pendentes === 1 ? 'caixa em posse' : 'caixas em posse'} aguardando devolução
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={data}
+                  onChange={(e) => setData(e.target.value)}
+                  className="rounded-lg border px-3 py-2 text-sm"
+                  style={{ borderColor: 'var(--line)', background: 'var(--bg-panel)' }}
+                />
+                {!ehHoje && (
+                  <button
+                    onClick={() => setData(hojeLocalISO())}
+                    className="text-sm font-medium px-3 py-2 rounded-lg"
+                    style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
+                  >
+                    Voltar para hoje
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {ehHoje && <FormularioEntrega onSucesso={carregar} setorAtual={setorAtual} />}
+
+            {carregando ? (
+              <div className="text-center py-12 text-sm" style={{ color: 'var(--ink-soft)' }}>
+                Carregando…
+              </div>
+            ) : (
+              <TabelaDispensacoes dispensacoes={dispensacoes} onAtualizar={carregar} isAdmin={isAdmin} />
+            )}
+          </>
         )}
       </main>
     </div>

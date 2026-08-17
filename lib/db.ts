@@ -62,6 +62,27 @@ function initDb(): DatabaseSync {
   `);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS setores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome TEXT NOT NULL UNIQUE,
+      ativo INTEGER NOT NULL DEFAULT 1,
+      criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+  `);
+
+  // Migração segura: adiciona as colunas de setor em bancos que já existiam
+  // antes desse recurso (SQLite não suporta "ADD COLUMN IF NOT EXISTS", então
+  // checamos manualmente quais colunas já existem antes de tentar criar).
+  const colunasDispensacoes = db.prepare("PRAGMA table_info(dispensacoes)").all() as { name: string }[];
+  const nomesColunas = new Set(colunasDispensacoes.map((c) => c.name));
+  if (!nomesColunas.has('setor_id')) {
+    db.exec('ALTER TABLE dispensacoes ADD COLUMN setor_id INTEGER;');
+  }
+  if (!nomesColunas.has('setor_nome')) {
+    db.exec('ALTER TABLE dispensacoes ADD COLUMN setor_nome TEXT;');
+  }
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS historico_edicoes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       dispensacao_id INTEGER NOT NULL,
@@ -80,6 +101,7 @@ function initDb(): DatabaseSync {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_disp_caixa ON dispensacoes(codigo_caixa);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_disp_data ON dispensacoes(horario_entrega);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_disp_status ON dispensacoes(status);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_disp_setor ON dispensacoes(setor_id);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_usuarios_login ON usuarios(login);`);
 
   return db;

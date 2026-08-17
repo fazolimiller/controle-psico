@@ -4,6 +4,8 @@ export interface Dispensacao {
   nome_anestesista: string | null;
   codigo_caixa: string;
   codigo_atendimento_paciente: string;
+  setor_id: number | null;
+  setor_nome: string | null;
   horario_entrega: string;
   horario_devolucao: string | null;
   status: 'em_posse' | 'devolvida';
@@ -14,6 +16,13 @@ export interface Dispensacao {
   devolvido_por_nome: string | null;
   criado_em: string;
   atualizado_em: string;
+}
+
+export interface Setor {
+  id: number;
+  nome: string;
+  ativo: number;
+  criado_em: string;
 }
 
 export interface HistoricoEdicao {

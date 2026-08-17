@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, run, isUsingPostgres } from '@/lib/db-adapter';
 import { getSession } from '@/lib/auth';
 
-// GET /api/dispensacoes?data=2026-08-14&anestesista=...&paciente=...&caixa=...&status=...
+// GET /api/dispensacoes?data=2026-08-14&anestesista=...&paciente=...&caixa=...&status=...&setorId=...
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
 
@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get('status');
   const dataInicio = searchParams.get('dataInicio');
   const dataFim = searchParams.get('dataFim');
+  const setorId = searchParams.get('setorId');
 
   let sql = 'SELECT * FROM dispensacoes WHERE 1=1';
   const params: (string | number)[] = [];
@@ -51,6 +52,10 @@ export async function GET(req: NextRequest) {
     sql += ' AND status = ?';
     params.push(status);
   }
+  if (setorId) {
+    sql += ' AND setor_id = ?';
+    params.push(Number(setorId));
+  }
 
   sql += ' ORDER BY horario_entrega DESC';
 
@@ -62,13 +67,18 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getSession();
   const body = await req.json();
-  const { codigo_anestesista, codigo_caixa, codigo_atendimento_paciente, horario_entrega, observacoes } = body;
+  const { codigo_anestesista, codigo_caixa, codigo_atendimento_paciente, setor_id, horario_entrega, observacoes } =
+    body;
 
   if (!codigo_anestesista || !codigo_caixa || !codigo_atendimento_paciente) {
     return NextResponse.json(
-      { error: 'Código do anestesista, código da caixa e código do aviso cirúrgico são obrigatórios.' },
+      { error: 'Código do anestesista, código da caixa e código do atendimento são obrigatórios.' },
       { status: 400 }
     );
+  }
+
+  if (!setor_id) {
+    return NextResponse.json({ error: 'Selecione o setor antes de registrar a entrega.' }, { status: 400 });
   }
 
   const anestesista = await query<{ nome: string; ativo: number }>(
@@ -86,17 +96,27 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const setor = await query<{ nome: string; ativo: number }>('SELECT nome, ativo FROM setores WHERE id = ?', [
+    Number(setor_id),
+  ]);
+
+  if (setor.length === 0 || !setor[0].ativo) {
+    return NextResponse.json({ error: 'Setor inválido ou removido. Atualize a página e tente novamente.' }, { status: 422 });
+  }
+
   const horarioFinal = horario_entrega || new Date().toISOString().slice(0, 19).replace('T', ' ');
 
   const result = await run(
     `INSERT INTO dispensacoes
-      (codigo_anestesista, nome_anestesista, codigo_caixa, codigo_atendimento_paciente, horario_entrega, observacoes, status, registrado_por_id, registrado_por_nome)
-     VALUES (?, ?, ?, ?, ?, ?, 'em_posse', ?, ?)`,
+      (codigo_anestesista, nome_anestesista, codigo_caixa, codigo_atendimento_paciente, setor_id, setor_nome, horario_entrega, observacoes, status, registrado_por_id, registrado_por_nome)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'em_posse', ?, ?)`,
     [
       codigo_anestesista,
       anestesista[0].nome,
       codigo_caixa,
       codigo_atendimento_paciente,
+      Number(setor_id),
+      setor[0].nome,
       horarioFinal,
       observacoes || null,
       session?.userId ?? null,

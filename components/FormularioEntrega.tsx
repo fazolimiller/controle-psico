@@ -3,11 +3,17 @@
 import { useState, useRef, useEffect, useCallback, FormEvent } from 'react';
 import { Anestesista } from '@/lib/types';
 
-interface Props {
-  onSucesso: () => void;
+interface SetorAtual {
+  id: number;
+  nome: string;
 }
 
-export default function FormularioEntrega({ onSucesso }: Props) {
+interface Props {
+  onSucesso: () => void;
+  setorAtual: SetorAtual | null;
+}
+
+export default function FormularioEntrega({ onSucesso, setorAtual }: Props) {
   const [codigoAnestesista, setCodigoAnestesista] = useState('');
   const [codigoCaixa, setCodigoCaixa] = useState('');
   const [codigoPaciente, setCodigoPaciente] = useState('');
@@ -27,6 +33,12 @@ export default function FormularioEntrega({ onSucesso }: Props) {
       .then(setAnestesistas)
       .catch(() => {});
   }, []);
+
+  // Sempre que o setor (aba) selecionado muda, foca de novo no crachá — o
+  // fluxo natural é: trocar de aba, escanear o próximo crachá.
+  useEffect(() => {
+    crachaRef.current?.focus();
+  }, [setorAtual?.id]);
 
   const anestesistaEncontrado = anestesistas.find(
     (a) => a.codigo_cracha === codigoAnestesista.trim() && a.ativo
@@ -66,6 +78,11 @@ export default function FormularioEntrega({ onSucesso }: Props) {
     e.preventDefault();
     setErro('');
 
+    if (!setorAtual) {
+      setErro('Nenhum setor selecionado. Escolha uma aba de setor antes de registrar.');
+      return;
+    }
+
     if (!codigoAnestesista.trim() || !codigoCaixa.trim() || !codigoPaciente.trim()) {
       setErro('Preencha todos os campos obrigatórios.');
       return;
@@ -87,6 +104,7 @@ export default function FormularioEntrega({ onSucesso }: Props) {
           codigo_anestesista: codigoAnestesista.trim(),
           codigo_caixa: codigoCaixa.trim(),
           codigo_atendimento_paciente: codigoPaciente.trim(),
+          setor_id: setorAtual.id,
         }),
       });
 
@@ -109,7 +127,7 @@ export default function FormularioEntrega({ onSucesso }: Props) {
     }
   }
 
-  const podeEnviar = !enviando && crachaDigitado && !!anestesistaEncontrado;
+  const podeEnviar = !enviando && crachaDigitado && !!anestesistaEncontrado && !!setorAtual;
 
   return (
     <form
@@ -118,7 +136,7 @@ export default function FormularioEntrega({ onSucesso }: Props) {
       style={{ background: 'var(--bg-panel)', borderColor: 'var(--line)' }}
     >
       <h2 className="font-display text-lg mb-4" style={{ color: 'var(--ink)' }}>
-        Registrar nova entrega
+        Registrar nova entrega {setorAtual && <span style={{ color: 'var(--accent)' }}>— {setorAtual.nome}</span>}
       </h2>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -185,14 +203,14 @@ export default function FormularioEntrega({ onSucesso }: Props) {
 
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--ink-soft)' }}>
-            Aviso Cirúrgico
+            Atendimento
           </label>
           <input
             ref={pacienteRef}
             type="text"
             value={codigoPaciente}
             onChange={(e) => setCodigoPaciente(e.target.value)}
-            placeholder="Código do aviso cirúrgico"
+            placeholder="Código do atendimento"
             className="font-mono w-full rounded-lg border px-3 py-3 text-base"
             style={{ borderColor: 'var(--line)', background: 'var(--bg)' }}
             autoComplete="off"

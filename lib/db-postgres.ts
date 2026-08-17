@@ -63,6 +63,21 @@ async function ensureSchema(): Promise<void> {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS setores (
+      id SERIAL PRIMARY KEY,
+      nome TEXT NOT NULL UNIQUE,
+      ativo INTEGER NOT NULL DEFAULT 1,
+      criado_em TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  // Migração segura para bancos que já existiam antes deste recurso — o
+  // Postgres suporta "ADD COLUMN IF NOT EXISTS" nativamente, então essas
+  // linhas não fazem nada se as colunas já existirem (idempotente).
+  await pool.query(`ALTER TABLE dispensacoes ADD COLUMN IF NOT EXISTS setor_id INTEGER;`);
+  await pool.query(`ALTER TABLE dispensacoes ADD COLUMN IF NOT EXISTS setor_nome TEXT;`);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS historico_edicoes (
       id SERIAL PRIMARY KEY,
       dispensacao_id INTEGER NOT NULL REFERENCES dispensacoes(id),
@@ -80,6 +95,7 @@ async function ensureSchema(): Promise<void> {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_disp_caixa ON dispensacoes(codigo_caixa);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_disp_data ON dispensacoes(horario_entrega);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_disp_status ON dispensacoes(status);`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_disp_setor ON dispensacoes(setor_id);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_usuarios_login ON usuarios(login);`);
 }
 

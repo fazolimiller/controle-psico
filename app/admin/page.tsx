@@ -9,6 +9,11 @@ const SECOES = [
     descricao: 'Vincular o código do crachá ao nome do anestesista, para que apareça automaticamente nas entregas.',
   },
   {
+    href: '/admin/setores',
+    titulo: 'Setores',
+    descricao: 'Adicionar, editar ou remover os setores do hospital que aparecem como abas para todos os usuários.',
+  },
+  {
     href: '/admin/usuarios',
     titulo: 'Usuários',
     descricao: 'Criar e gerenciar logins da equipe da farmácia — quem acessa o sistema e com qual permissão.',
