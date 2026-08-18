@@ -22,6 +22,7 @@ export default function HomePage() {
   const [setores, setSetores] = useState<Setor[]>([]);
   const [setoresCarregados, setSetoresCarregados] = useState(false);
   const [setorAtualId, setSetorAtualId] = useState<number | null>(null);
+  const [filtroStatus, setFiltroStatus] = useState<'em_posse' | 'devolvida' | 'todas'>('em_posse');
   const router = useRouter();
   const { sessao, isAdmin } = useSessao();
 
@@ -44,12 +45,16 @@ export default function HomePage() {
       return;
     }
     setCarregando(true);
-    const res = await fetch(`/api/dispensacoes?data=${data}&setorId=${setorAtualId}`);
+    const params = new URLSearchParams({ data, setorId: String(setorAtualId) });
+    if (filtroStatus !== 'todas') {
+      params.set('status', filtroStatus);
+    }
+    const res = await fetch(`/api/dispensacoes?${params}`);
     if (res.ok) {
       setDispensacoes(await res.json());
     }
     setCarregando(false);
-  }, [data, setorAtualId]);
+  }, [data, setorAtualId, filtroStatus]);
 
   useEffect(() => {
     carregar();
@@ -158,7 +163,22 @@ export default function HomePage() {
                   </p>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-end gap-2">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--ink-soft)' }}>
+                    Caixas
+                  </label>
+                  <select
+                    value={filtroStatus}
+                    onChange={(e) => setFiltroStatus(e.target.value as 'em_posse' | 'devolvida' | 'todas')}
+                    className="rounded-lg border px-3 py-2 text-sm"
+                    style={{ borderColor: 'var(--line)', background: 'var(--bg-panel)' }}
+                  >
+                    <option value="em_posse">Em posse</option>
+                    <option value="devolvida">Devolvidas</option>
+                    <option value="todas">Todas</option>
+                  </select>
+                </div>
                 <input
                   type="date"
                   value={data}

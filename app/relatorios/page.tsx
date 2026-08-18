@@ -28,6 +28,7 @@ const CABECALHOS = [
   'Código Anestesista',
   'Nome Anestesista',
   'Atendimento',
+  'Kit Venosa',
   'Horário Dispensação',
   'Horário Devolução',
   'Registrado por',
@@ -42,6 +43,7 @@ function linhaParaExportacao(d: Dispensacao): string[] {
     d.codigo_anestesista,
     d.nome_anestesista || '',
     d.codigo_atendimento_paciente,
+    d.kit_venoso ? 'Sim' : 'Não',
     formatarDataHoraBR(d.horario_entrega),
     formatarDataHoraBR(d.horario_devolucao),
     d.registrado_por_nome || '',
@@ -225,6 +227,7 @@ export default function RelatoriosPage() {
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Setor</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Anestesista</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Atendimento</th>
+                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Kit Venosa</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Dispensação</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Devolução</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Funcionário</th>
@@ -243,6 +246,18 @@ export default function RelatoriosPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 font-mono">{d.codigo_atendimento_paciente}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                          style={
+                            d.kit_venoso
+                              ? { background: 'var(--accent-soft)', color: 'var(--accent)' }
+                              : { background: 'var(--line)', color: 'var(--ink-soft)' }
+                          }
+                        >
+                          {d.kit_venoso ? 'Sim' : 'Não'}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 font-mono whitespace-nowrap">{formatarDataHoraBR(d.horario_entrega)}</td>
                       <td className="px-4 py-3 font-mono whitespace-nowrap">{formatarDataHoraBR(d.horario_devolucao)}</td>
                       <td className="px-4 py-3 text-xs" style={{ color: 'var(--ink-soft)' }}>

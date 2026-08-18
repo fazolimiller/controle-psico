@@ -12,8 +12,8 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { codigo_cracha, nome, crm } = body;
 
-  if (!codigo_cracha || !nome) {
-    return NextResponse.json({ error: 'Código do crachá e nome são obrigatórios.' }, { status: 400 });
+  if (!codigo_cracha || !nome || !crm) {
+    return NextResponse.json({ error: 'Código do crachá, nome e CRM são obrigatórios.' }, { status: 400 });
   }
 
   const upsert = isUsingPostgres()
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     : `INSERT INTO anestesistas (codigo_cracha, nome, crm) VALUES (?, ?, ?)
        ON CONFLICT(codigo_cracha) DO UPDATE SET nome = excluded.nome, crm = excluded.crm`;
 
-  await run(upsert, [codigo_cracha, nome, crm || null]);
+  await run(upsert, [codigo_cracha, nome, crm]);
 
   const linha = await query('SELECT * FROM anestesistas WHERE codigo_cracha = ?', [codigo_cracha]);
   return NextResponse.json(linha[0], { status: 201 });

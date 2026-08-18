@@ -15,6 +15,7 @@ export default function AnestesistasAdminPage() {
   const [editandoCodigo, setEditandoCodigo] = useState<string | null>(null);
   const [nomeEdicao, setNomeEdicao] = useState('');
   const [crmEdicao, setCrmEdicao] = useState('');
+  const [erroEdicao, setErroEdicao] = useState('');
   const codigoRef = useRef<HTMLInputElement>(null);
 
   const carregar = useCallback(async () => {
@@ -32,8 +33,8 @@ export default function AnestesistasAdminPage() {
     e.preventDefault();
     setErro('');
 
-    if (!codigo.trim() || !nome.trim()) {
-      setErro('Código do crachá e nome são obrigatórios.');
+    if (!codigo.trim() || !nome.trim() || !crm.trim()) {
+      setErro('Código do crachá, nome e CRM são obrigatórios.');
       return;
     }
 
@@ -42,7 +43,7 @@ export default function AnestesistasAdminPage() {
       const res = await fetch('/api/admin/anestesistas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codigo_cracha: codigo.trim(), nome: nome.trim(), crm: crm.trim() || null }),
+        body: JSON.stringify({ codigo_cracha: codigo.trim(), nome: nome.trim(), crm: crm.trim() }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -64,14 +65,25 @@ export default function AnestesistasAdminPage() {
     setEditandoCodigo(a.codigo_cracha);
     setNomeEdicao(a.nome);
     setCrmEdicao(a.crm || '');
+    setErroEdicao('');
   }
 
   async function salvarEdicao(codigoCracha: string) {
-    await fetch(`/api/admin/anestesistas/${encodeURIComponent(codigoCracha)}`, {
+    setErroEdicao('');
+    if (!nomeEdicao.trim() || !crmEdicao.trim()) {
+      setErroEdicao('Nome e CRM são obrigatórios.');
+      return;
+    }
+    const res = await fetch(`/api/admin/anestesistas/${encodeURIComponent(codigoCracha)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome: nomeEdicao, crm: crmEdicao || null }),
+      body: JSON.stringify({ nome: nomeEdicao, crm: crmEdicao.trim() }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setErroEdicao(data.error || 'Erro ao salvar.');
+      return;
+    }
     setEditandoCodigo(null);
     carregar();
   }
@@ -130,7 +142,7 @@ export default function AnestesistasAdminPage() {
             </div>
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--ink-soft)' }}>
-                CRM (opcional)
+                CRM
               </label>
               <input
                 value={crm}
@@ -207,17 +219,22 @@ export default function AnestesistasAdminPage() {
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         {emEdicao ? (
-                          <div className="flex gap-2 justify-end">
-                            <button onClick={() => setEditandoCodigo(null)} className="text-xs px-2 py-1" style={{ color: 'var(--ink-soft)' }}>
-                              Cancelar
-                            </button>
-                            <button
-                              onClick={() => salvarEdicao(a.codigo_cracha)}
-                              className="text-xs px-3 py-1 rounded font-medium text-white"
-                              style={{ background: 'var(--accent)' }}
-                            >
-                              Salvar
-                            </button>
+                          <div className="flex flex-col gap-2 items-end">
+                            {erroEdicao && (
+                              <p className="text-xs" style={{ color: 'var(--red)' }}>{erroEdicao}</p>
+                            )}
+                            <div className="flex gap-2">
+                              <button onClick={() => setEditandoCodigo(null)} className="text-xs px-2 py-1" style={{ color: 'var(--ink-soft)' }}>
+                                Cancelar
+                              </button>
+                              <button
+                                onClick={() => salvarEdicao(a.codigo_cracha)}
+                                className="text-xs px-3 py-1 rounded font-medium text-white"
+                                style={{ background: 'var(--accent)' }}
+                              >
+                                Salvar
+                              </button>
+                            </div>
                           </div>
                         ) : (
                           <div className="flex gap-3 justify-end">

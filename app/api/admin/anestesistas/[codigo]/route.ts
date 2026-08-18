@@ -19,6 +19,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
     paramsList.push(body.nome);
   }
   if (body.crm !== undefined) {
+    if (!body.crm || !String(body.crm).trim()) {
+      return NextResponse.json({ error: 'O CRM é obrigatório e não pode ficar em branco.' }, { status: 400 });
+    }
     updates.push('crm = ?');
     paramsList.push(body.crm);
   }

@@ -17,6 +17,7 @@ export default function FormularioEntrega({ onSucesso, setorAtual }: Props) {
   const [codigoAnestesista, setCodigoAnestesista] = useState('');
   const [codigoCaixa, setCodigoCaixa] = useState('');
   const [codigoPaciente, setCodigoPaciente] = useState('');
+  const [kitVenoso, setKitVenoso] = useState(false);
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [crachaLido, setCrachaLido] = useState(false);
@@ -105,6 +106,7 @@ export default function FormularioEntrega({ onSucesso, setorAtual }: Props) {
           codigo_caixa: codigoCaixa.trim(),
           codigo_atendimento_paciente: codigoPaciente.trim(),
           setor_id: setorAtual.id,
+          kit_venoso: kitVenoso,
         }),
       });
 
@@ -116,6 +118,7 @@ export default function FormularioEntrega({ onSucesso, setorAtual }: Props) {
       setCodigoAnestesista('');
       setCodigoCaixa('');
       setCodigoPaciente('');
+      setKitVenoso(false);
       setCrachaLido(false);
       onSucesso();
       recarregarAnestesistas();
@@ -139,7 +142,7 @@ export default function FormularioEntrega({ onSucesso, setorAtual }: Props) {
         Registrar nova entrega {setorAtual && <span style={{ color: 'var(--accent)' }}>— {setorAtual.nome}</span>}
       </h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Campo de crachá — o "herói" da tela */}
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--ink-soft)' }}>
@@ -215,6 +218,21 @@ export default function FormularioEntrega({ onSucesso, setorAtual }: Props) {
             style={{ borderColor: 'var(--line)', background: 'var(--bg)' }}
             autoComplete="off"
           />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--ink-soft)' }}>
+            Kit Venosa
+          </label>
+          <select
+            value={kitVenoso ? 'sim' : 'nao'}
+            onChange={(e) => setKitVenoso(e.target.value === 'sim')}
+            className="w-full rounded-lg border px-3 py-3 text-base"
+            style={{ borderColor: 'var(--line)', background: 'var(--bg)' }}
+          >
+            <option value="nao">Não</option>
+            <option value="sim">Sim</option>
+          </select>
         </div>
       </div>
 

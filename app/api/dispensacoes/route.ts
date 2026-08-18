@@ -67,8 +67,15 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getSession();
   const body = await req.json();
-  const { codigo_anestesista, codigo_caixa, codigo_atendimento_paciente, setor_id, horario_entrega, observacoes } =
-    body;
+  const {
+    codigo_anestesista,
+    codigo_caixa,
+    codigo_atendimento_paciente,
+    setor_id,
+    kit_venoso,
+    horario_entrega,
+    observacoes,
+  } = body;
 
   if (!codigo_anestesista || !codigo_caixa || !codigo_atendimento_paciente) {
     return NextResponse.json(
@@ -108,8 +115,8 @@ export async function POST(req: NextRequest) {
 
   const result = await run(
     `INSERT INTO dispensacoes
-      (codigo_anestesista, nome_anestesista, codigo_caixa, codigo_atendimento_paciente, setor_id, setor_nome, horario_entrega, observacoes, status, registrado_por_id, registrado_por_nome)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'em_posse', ?, ?)`,
+      (codigo_anestesista, nome_anestesista, codigo_caixa, codigo_atendimento_paciente, setor_id, setor_nome, kit_venoso, horario_entrega, observacoes, status, registrado_por_id, registrado_por_nome)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'em_posse', ?, ?)`,
     [
       codigo_anestesista,
       anestesista[0].nome,
@@ -117,6 +124,7 @@ export async function POST(req: NextRequest) {
       codigo_atendimento_paciente,
       Number(setor_id),
       setor[0].nome,
+      kit_venoso ? 1 : 0,
       horarioFinal,
       observacoes || null,
       session?.userId ?? null,

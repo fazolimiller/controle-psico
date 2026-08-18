@@ -6,6 +6,7 @@ export interface Dispensacao {
   codigo_atendimento_paciente: string;
   setor_id: number | null;
   setor_nome: string | null;
+  kit_venoso: number;
   horario_entrega: string;
   horario_devolucao: string | null;
   status: 'em_posse' | 'devolvida';

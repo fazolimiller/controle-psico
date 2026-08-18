@@ -76,6 +76,10 @@ async function ensureSchema(): Promise<void> {
   // linhas não fazem nada se as colunas já existirem (idempotente).
   await pool.query(`ALTER TABLE dispensacoes ADD COLUMN IF NOT EXISTS setor_id INTEGER;`);
   await pool.query(`ALTER TABLE dispensacoes ADD COLUMN IF NOT EXISTS setor_nome TEXT;`);
+  // 0 = Não (padrão), 1 = Sim
+  await pool.query(
+    `ALTER TABLE dispensacoes ADD COLUMN IF NOT EXISTS kit_venoso INTEGER NOT NULL DEFAULT 0;`
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS historico_edicoes (

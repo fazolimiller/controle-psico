@@ -81,6 +81,10 @@ function initDb(): DatabaseSync {
   if (!nomesColunas.has('setor_nome')) {
     db.exec('ALTER TABLE dispensacoes ADD COLUMN setor_nome TEXT;');
   }
+  if (!nomesColunas.has('kit_venoso')) {
+    // 0 = Não (padrão), 1 = Sim
+    db.exec("ALTER TABLE dispensacoes ADD COLUMN kit_venoso INTEGER NOT NULL DEFAULT 0;");
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS historico_edicoes (
