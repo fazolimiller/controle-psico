@@ -80,6 +80,11 @@ async function ensureSchema(): Promise<void> {
   await pool.query(
     `ALTER TABLE dispensacoes ADD COLUMN IF NOT EXISTS kit_venoso INTEGER NOT NULL DEFAULT 0;`
   );
+  // Anestesista que efetivamente devolveu a caixa — pode ser diferente do que
+  // a retirou (ex: troca de plantão). Distinto de devolvido_por_nome, que é o
+  // funcionário da farmácia que registrou a devolução no sistema.
+  await pool.query(`ALTER TABLE dispensacoes ADD COLUMN IF NOT EXISTS anestesista_devolucao_cracha TEXT;`);
+  await pool.query(`ALTER TABLE dispensacoes ADD COLUMN IF NOT EXISTS anestesista_devolucao_nome TEXT;`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS historico_edicoes (

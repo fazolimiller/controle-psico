@@ -27,6 +27,7 @@ const CABECALHOS = [
   'Setor',
   'Código Anestesista',
   'Nome Anestesista',
+  'Anestesista Devolução',
   'Atendimento',
   'Kit Venosa',
   'Horário Dispensação',
@@ -42,6 +43,7 @@ function linhaParaExportacao(d: Dispensacao): string[] {
     d.setor_nome || '',
     d.codigo_anestesista,
     d.nome_anestesista || '',
+    d.anestesista_devolucao_nome || '',
     d.codigo_atendimento_paciente,
     d.kit_venoso ? 'Sim' : 'Não',
     formatarDataHoraBR(d.horario_entrega),
@@ -81,6 +83,7 @@ export default function RelatoriosPage() {
           d.setor_nome,
           d.codigo_anestesista,
           d.nome_anestesista,
+          d.anestesista_devolucao_nome,
           d.codigo_atendimento_paciente,
           d.registrado_por_nome,
           d.devolvido_por_nome,
@@ -226,6 +229,7 @@ export default function RelatoriosPage() {
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Caixa</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Setor</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Anestesista</th>
+                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Anestesista Devolução</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Atendimento</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Kit Venosa</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Dispensação</th>
@@ -243,6 +247,22 @@ export default function RelatoriosPage() {
                         <div>{d.codigo_anestesista}</div>
                         {d.nome_anestesista && (
                           <div className="font-sans text-xs" style={{ color: 'var(--ink-soft)' }}>{d.nome_anestesista}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {d.anestesista_devolucao_nome ? (
+                          <span
+                            style={{
+                              color:
+                                d.anestesista_devolucao_cracha !== d.codigo_anestesista
+                                  ? 'var(--amber)'
+                                  : 'var(--ink-soft)',
+                            }}
+                          >
+                            {d.anestesista_devolucao_nome}
+                          </span>
+                        ) : (
+                          '—'
                         )}
                       </td>
                       <td className="px-4 py-3 font-mono">{d.codigo_atendimento_paciente}</td>

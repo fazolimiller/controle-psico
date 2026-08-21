@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Dispensacao } from '@/lib/types';
+import { useState, useEffect } from 'react';
+import { Dispensacao, Anestesista } from '@/lib/types';
 import { formatarDataHoraBR } from '@/lib/formatarData';
 
 interface Props {
@@ -15,11 +15,26 @@ export default function TabelaDispensacoes({ dispensacoes, onAtualizar, isAdmin 
   const [campoEdicao, setCampoEdicao] = useState<Record<string, string>>({});
   const [processandoId, setProcessandoId] = useState<number | null>(null);
   const [confirmandoExclusaoId, setConfirmandoExclusaoId] = useState<number | null>(null);
+  const [anestesistas, setAnestesistas] = useState<Anestesista[]>([]);
+  // Guarda a escolha de quem devolveu, por linha. Quando não há escolha
+  // explícita, usamos o anestesista que retirou a caixa (padrão).
+  const [devolvidoPor, setDevolvidoPor] = useState<Record<number, string>>({});
 
-  async function registrarDevolucao(id: number) {
+  useEffect(() => {
+    fetch('/api/anestesistas')
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setAnestesistas)
+      .catch(() => {});
+  }, []);
+
+  async function registrarDevolucao(id: number, crachaEscolhido: string) {
     setProcessandoId(id);
     try {
-      const res = await fetch(`/api/dispensacoes/${id}/devolucao`, { method: 'POST' });
+      const res = await fetch(`/api/dispensacoes/${id}/devolucao`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ anestesista_devolucao_cracha: crachaEscolhido }),
+      });
       if (res.ok) onAtualizar();
     } finally {
       setProcessandoId(null);
@@ -223,14 +238,40 @@ export default function TabelaDispensacoes({ dispensacoes, onAtualizar, isAdmin 
                           </>
                         )}
                         {disp.status === 'em_posse' && (
-                          <button
-                            onClick={() => registrarDevolucao(disp.id)}
-                            disabled={processandoId === disp.id}
-                            className="text-xs font-medium px-3 py-1 rounded"
-                            style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
-                          >
-                            {processandoId === disp.id ? 'Registrando…' : 'Registrar devolução'}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={devolvidoPor[disp.id] ?? disp.codigo_anestesista}
+                              onChange={(e) =>
+                                setDevolvidoPor((atual) => ({ ...atual, [disp.id]: e.target.value }))
+                              }
+                              className="text-xs rounded border px-2 py-1 max-w-[180px]"
+                              style={{ borderColor: 'var(--line)', background: 'var(--bg)' }}
+                              title="Anestesista que está devolvendo a caixa"
+                            >
+                              {/* Garante que o anestesista que retirou apareça como opção,
+                                  mesmo que tenha sido removido do cadastro depois. */}
+                              {!anestesistas.some((a) => a.codigo_cracha === disp.codigo_anestesista) && (
+                                <option value={disp.codigo_anestesista}>
+                                  {disp.nome_anestesista || disp.codigo_anestesista}
+                                </option>
+                              )}
+                              {anestesistas.map((a) => (
+                                <option key={a.codigo_cracha} value={a.codigo_cracha}>
+                                  {a.nome}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() =>
+                                registrarDevolucao(disp.id, devolvidoPor[disp.id] ?? disp.codigo_anestesista)
+                              }
+                              disabled={processandoId === disp.id}
+                              className="text-xs font-medium px-3 py-1 rounded whitespace-nowrap"
+                              style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
+                            >
+                              {processandoId === disp.id ? 'Registrando…' : 'Registrar devolução'}
+                            </button>
+                          </div>
                         )}
                       </div>
                     )}

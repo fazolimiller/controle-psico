@@ -15,6 +15,8 @@ export interface Dispensacao {
   registrado_por_nome: string | null;
   devolvido_por_id: number | null;
   devolvido_por_nome: string | null;
+  anestesista_devolucao_cracha: string | null;
+  anestesista_devolucao_nome: string | null;
   criado_em: string;
   atualizado_em: string;
 }

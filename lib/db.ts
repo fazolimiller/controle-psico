@@ -85,6 +85,15 @@ function initDb(): DatabaseSync {
     // 0 = Não (padrão), 1 = Sim
     db.exec("ALTER TABLE dispensacoes ADD COLUMN kit_venoso INTEGER NOT NULL DEFAULT 0;");
   }
+  // Anestesista que efetivamente devolveu a caixa — pode ser diferente do que
+  // a retirou (ex: troca de plantão). Distinto de devolvido_por_nome, que é o
+  // funcionário da farmácia que registrou a devolução no sistema.
+  if (!nomesColunas.has('anestesista_devolucao_cracha')) {
+    db.exec('ALTER TABLE dispensacoes ADD COLUMN anestesista_devolucao_cracha TEXT;');
+  }
+  if (!nomesColunas.has('anestesista_devolucao_nome')) {
+    db.exec('ALTER TABLE dispensacoes ADD COLUMN anestesista_devolucao_nome TEXT;');
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS historico_edicoes (
