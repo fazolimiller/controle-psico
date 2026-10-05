@@ -1,29 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, run, isUsingPostgres } from '@/lib/db-adapter';
+import { query, queryOne, run } from '@/lib/db-adapter';
+import { exigirSessao, rota } from '@/lib/auth';
+import { registrarAuditoria } from '@/lib/auditoria';
+import { agoraUTC } from '@/lib/tempo';
+import { codigo, lerCorpo, textoObrigatorio } from '@/lib/validacao';
 
-// GET /api/admin/anestesistas — lista para a tela de gerenciamento
-export async function GET() {
-  const rows = await query('SELECT * FROM anestesistas ORDER BY nome ASC');
-  return NextResponse.json(rows);
-}
+// GET /api/admin/anestesistas — cadastro completo (exceto excluídos)
+export const GET = rota(async (req: NextRequest) => {
+  const auth = await exigirSessao(req, ['admin']);
+  if (!auth.ok) return auth.resposta;
+  return NextResponse.json(await query('SELECT * FROM anestesistas WHERE excluido_em IS NULL ORDER BY nome ASC'));
+});
 
-// POST /api/admin/anestesistas — cadastrar novo vínculo crachá → nome (só admin)
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { codigo_cracha, nome, crm } = body;
+// POST /api/admin/anestesistas — vincular crachá → nome/CRM. Se o crachá já
+// existiu e foi excluído, o cadastro é reativado com os novos dados.
+export const POST = rota(async (req: NextRequest) => {
+  const auth = await exigirSessao(req, ['admin']);
+  if (!auth.ok) return auth.resposta;
+  const { sessao } = auth;
 
-  if (!codigo_cracha || !nome || !crm) {
-    return NextResponse.json({ error: 'Código do crachá, nome e CRM são obrigatórios.' }, { status: 400 });
+  const corpo = await lerCorpo(req);
+  const cracha = codigo(corpo.codigo_cracha, 'código do crachá');
+  const nome = textoObrigatorio(corpo.nome, 'nome', 200);
+  const crm = textoObrigatorio(corpo.crm, 'CRM', 30);
+
+  const existente = await queryOne<{ nome: string; crm: string | null; excluido_em: string | null }>(
+    'SELECT nome, crm, excluido_em FROM anestesistas WHERE codigo_cracha = ?',
+    [cracha]
+  );
+  if (existente) {
+    await run('UPDATE anestesistas SET nome = ?, crm = ?, ativo = 1, excluido_em = NULL, excluido_por_nome = NULL WHERE codigo_cracha = ?', [
+      nome,
+      crm,
+      cracha,
+    ]);
+  } else {
+    await run('INSERT INTO anestesistas (codigo_cracha, nome, crm, ativo, criado_em) VALUES (?, ?, ?, 1, ?)', [
+      cracha,
+      nome,
+      crm,
+      agoraUTC(),
+    ]);
   }
 
-  const upsert = isUsingPostgres()
-    ? `INSERT INTO anestesistas (codigo_cracha, nome, crm) VALUES (?, ?, ?)
-       ON CONFLICT (codigo_cracha) DO UPDATE SET nome = EXCLUDED.nome, crm = EXCLUDED.crm`
-    : `INSERT INTO anestesistas (codigo_cracha, nome, crm) VALUES (?, ?, ?)
-       ON CONFLICT(codigo_cracha) DO UPDATE SET nome = excluded.nome, crm = excluded.crm`;
+  await registrarAuditoria({
+    acao: 'anestesista_salvo',
+    usuarioId: sessao.userId,
+    usuarioLogin: sessao.login,
+    entidade: 'anestesista',
+    entidadeId: cracha,
+    detalhes: existente
+      ? { reativado: !!existente.excluido_em, antes: { nome: existente.nome, crm: existente.crm }, depois: { nome, crm } }
+      : { nome, crm },
+    req,
+  });
 
-  await run(upsert, [codigo_cracha, nome, crm]);
-
-  const linha = await query('SELECT * FROM anestesistas WHERE codigo_cracha = ?', [codigo_cracha]);
-  return NextResponse.json(linha[0], { status: 201 });
-}
+  return NextResponse.json(await queryOne('SELECT * FROM anestesistas WHERE codigo_cracha = ?', [cracha]), { status: 201 });
+});

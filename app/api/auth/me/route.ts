@@ -1,10 +1,8 @@
-import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { NextRequest, NextResponse } from 'next/server';
+import { exigirSessao, rota } from '@/lib/auth';
 
-export async function GET() {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });
-  }
-  return NextResponse.json(session);
-}
+export const GET = rota(async (req: NextRequest) => {
+  const auth = await exigirSessao(req, undefined, { permitirTrocaSenhaPendente: true });
+  if (!auth.ok) return auth.resposta;
+  return NextResponse.json(auth.sessao);
+});

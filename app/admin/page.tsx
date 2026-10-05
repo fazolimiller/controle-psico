@@ -18,6 +18,11 @@ const SECOES = [
     titulo: 'Usuários',
     descricao: 'Criar e gerenciar logins da equipe da farmácia — quem acessa o sistema e com qual permissão.',
   },
+  {
+    href: '/admin/auditoria',
+    titulo: 'Auditoria',
+    descricao: 'Consultar quem fez cada ação no sistema (acessos, entregas, devoluções, correções e exclusões) e exportar.',
+  },
 ];
 
 export default function AdminIndexPage() {

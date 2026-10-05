@@ -1,3 +1,4 @@
+// SQLite — USO EXCLUSIVO EM DESENVOLVIMENTO LOCAL (bloqueado em produção por lib/config.ts).
 import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import fs from 'fs';
@@ -5,16 +6,20 @@ import fs from 'fs';
 const DB_DIR = path.join(process.cwd(), 'data');
 const DB_PATH = path.join(DB_DIR, 'farmacia.db');
 
-if (!fs.existsSync(DB_DIR)) {
-  fs.mkdirSync(DB_DIR, { recursive: true });
-}
-
 declare global {
   // eslint-disable-next-line no-var
   var __db: DatabaseSync | undefined;
 }
 
+function adicionarColunaSeFaltar(db: DatabaseSync, tabela: string, coluna: string, definicao: string) {
+  const colunas = db.prepare(`PRAGMA table_info(${tabela})`).all() as { name: string }[];
+  if (!colunas.some((c) => c.name === coluna)) {
+    db.exec(`ALTER TABLE ${tabela} ADD COLUMN ${coluna} ${definicao};`);
+  }
+}
+
 function initDb(): DatabaseSync {
+  if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
   const db = new DatabaseSync(DB_PATH);
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec('PRAGMA foreign_keys = ON;');
@@ -27,11 +32,8 @@ function initDb(): DatabaseSync {
       senha_hash TEXT NOT NULL,
       papel TEXT NOT NULL DEFAULT 'funcionario',
       ativo INTEGER NOT NULL DEFAULT 1,
-      criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      criado_em TEXT NOT NULL DEFAULT (datetime('now'))
     );
-  `);
-
-  db.exec(`
     CREATE TABLE IF NOT EXISTS dispensacoes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       codigo_anestesista TEXT NOT NULL,
@@ -46,56 +48,22 @@ function initDb(): DatabaseSync {
       registrado_por_nome TEXT,
       devolvido_por_id INTEGER,
       devolvido_por_nome TEXT,
-      criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-      atualizado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      criado_em TEXT NOT NULL DEFAULT (datetime('now')),
+      atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
     );
-  `);
-
-  db.exec(`
     CREATE TABLE IF NOT EXISTS anestesistas (
       codigo_cracha TEXT PRIMARY KEY,
       nome TEXT NOT NULL,
       crm TEXT,
       ativo INTEGER NOT NULL DEFAULT 1,
-      criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      criado_em TEXT NOT NULL DEFAULT (datetime('now'))
     );
-  `);
-
-  db.exec(`
     CREATE TABLE IF NOT EXISTS setores (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       nome TEXT NOT NULL UNIQUE,
       ativo INTEGER NOT NULL DEFAULT 1,
-      criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      criado_em TEXT NOT NULL DEFAULT (datetime('now'))
     );
-  `);
-
-  // Migração segura: adiciona as colunas de setor em bancos que já existiam
-  // antes desse recurso (SQLite não suporta "ADD COLUMN IF NOT EXISTS", então
-  // checamos manualmente quais colunas já existem antes de tentar criar).
-  const colunasDispensacoes = db.prepare("PRAGMA table_info(dispensacoes)").all() as { name: string }[];
-  const nomesColunas = new Set(colunasDispensacoes.map((c) => c.name));
-  if (!nomesColunas.has('setor_id')) {
-    db.exec('ALTER TABLE dispensacoes ADD COLUMN setor_id INTEGER;');
-  }
-  if (!nomesColunas.has('setor_nome')) {
-    db.exec('ALTER TABLE dispensacoes ADD COLUMN setor_nome TEXT;');
-  }
-  if (!nomesColunas.has('kit_venoso')) {
-    // 0 = Não (padrão), 1 = Sim
-    db.exec("ALTER TABLE dispensacoes ADD COLUMN kit_venoso INTEGER NOT NULL DEFAULT 0;");
-  }
-  // Anestesista que efetivamente devolveu a caixa — pode ser diferente do que
-  // a retirou (ex: troca de plantão). Distinto de devolvido_por_nome, que é o
-  // funcionário da farmácia que registrou a devolução no sistema.
-  if (!nomesColunas.has('anestesista_devolucao_cracha')) {
-    db.exec('ALTER TABLE dispensacoes ADD COLUMN anestesista_devolucao_cracha TEXT;');
-  }
-  if (!nomesColunas.has('anestesista_devolucao_nome')) {
-    db.exec('ALTER TABLE dispensacoes ADD COLUMN anestesista_devolucao_nome TEXT;');
-  }
-
-  db.exec(`
     CREATE TABLE IF NOT EXISTS historico_edicoes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       dispensacao_id INTEGER NOT NULL,
@@ -104,25 +72,60 @@ function initDb(): DatabaseSync {
       valor_novo TEXT,
       editado_por_id INTEGER,
       editado_por_nome TEXT,
-      alterado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+      alterado_em TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (dispensacao_id) REFERENCES dispensacoes(id)
+    );
+    CREATE TABLE IF NOT EXISTS auditoria (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ocorrido_em TEXT NOT NULL,
+      usuario_id INTEGER,
+      usuario_login TEXT,
+      acao TEXT NOT NULL,
+      entidade TEXT,
+      entidade_id TEXT,
+      detalhes TEXT,
+      ip TEXT
     );
   `);
 
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_disp_anestesista ON dispensacoes(codigo_anestesista);`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_disp_paciente ON dispensacoes(codigo_atendimento_paciente);`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_disp_caixa ON dispensacoes(codigo_caixa);`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_disp_data ON dispensacoes(horario_entrega);`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_disp_status ON dispensacoes(status);`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_disp_setor ON dispensacoes(setor_id);`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_usuarios_login ON usuarios(login);`);
+  // Migrações idempotentes para bancos criados por versões anteriores.
+  adicionarColunaSeFaltar(db, 'dispensacoes', 'setor_id', 'INTEGER');
+  adicionarColunaSeFaltar(db, 'dispensacoes', 'setor_nome', 'TEXT');
+  adicionarColunaSeFaltar(db, 'dispensacoes', 'kit_venoso', 'INTEGER NOT NULL DEFAULT 0');
+  adicionarColunaSeFaltar(db, 'dispensacoes', 'anestesista_devolucao_cracha', 'TEXT');
+  adicionarColunaSeFaltar(db, 'dispensacoes', 'anestesista_devolucao_nome', 'TEXT');
+  // Exclusão lógica (soft delete)
+  adicionarColunaSeFaltar(db, 'dispensacoes', 'excluido_em', 'TEXT');
+  adicionarColunaSeFaltar(db, 'dispensacoes', 'excluido_por_id', 'INTEGER');
+  adicionarColunaSeFaltar(db, 'dispensacoes', 'excluido_por_nome', 'TEXT');
+  adicionarColunaSeFaltar(db, 'dispensacoes', 'motivo_exclusao', 'TEXT');
+  adicionarColunaSeFaltar(db, 'anestesistas', 'excluido_em', 'TEXT');
+  adicionarColunaSeFaltar(db, 'anestesistas', 'excluido_por_nome', 'TEXT');
+  adicionarColunaSeFaltar(db, 'setores', 'excluido_em', 'TEXT');
+  adicionarColunaSeFaltar(db, 'setores', 'excluido_por_nome', 'TEXT');
+  // Segurança de login e sessão
+  adicionarColunaSeFaltar(db, 'usuarios', 'tentativas_falhas', 'INTEGER NOT NULL DEFAULT 0');
+  adicionarColunaSeFaltar(db, 'usuarios', 'bloqueado_ate', 'TEXT');
+  adicionarColunaSeFaltar(db, 'usuarios', 'deve_trocar_senha', 'INTEGER NOT NULL DEFAULT 0');
+  adicionarColunaSeFaltar(db, 'usuarios', 'sessao_versao', 'INTEGER NOT NULL DEFAULT 1');
+  adicionarColunaSeFaltar(db, 'usuarios', 'senha_alterada_em', 'TEXT');
+  adicionarColunaSeFaltar(db, 'usuarios', 'ultimo_login_em', 'TEXT');
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_disp_anestesista ON dispensacoes(codigo_anestesista);
+    CREATE INDEX IF NOT EXISTS idx_disp_paciente ON dispensacoes(codigo_atendimento_paciente);
+    CREATE INDEX IF NOT EXISTS idx_disp_caixa ON dispensacoes(codigo_caixa);
+    CREATE INDEX IF NOT EXISTS idx_disp_data ON dispensacoes(horario_entrega);
+    CREATE INDEX IF NOT EXISTS idx_disp_status ON dispensacoes(status);
+    CREATE INDEX IF NOT EXISTS idx_disp_setor ON dispensacoes(setor_id);
+    CREATE INDEX IF NOT EXISTS idx_hist_disp ON historico_edicoes(dispensacao_id);
+    CREATE INDEX IF NOT EXISTS idx_aud_data ON auditoria(ocorrido_em);
+  `);
 
   return db;
 }
 
 export function getDb(): DatabaseSync {
-  if (!global.__db) {
-    global.__db = initDb();
-  }
+  if (!global.__db) global.__db = initDb();
   return global.__db;
 }

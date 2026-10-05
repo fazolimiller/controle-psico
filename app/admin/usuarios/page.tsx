@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, FormEvent } from 'react';
 import Link from 'next/link';
 import { UsuarioPublico } from '@/lib/types';
+import { formatarDataHoraBR } from '@/lib/formatarData';
+import { api } from '@/lib/useSessao';
 
 export default function UsuariosAdminPage() {
   const [lista, setLista] = useState<UsuarioPublico[]>([]);
@@ -18,11 +20,43 @@ export default function UsuariosAdminPage() {
   const [nomeEdicao, setNomeEdicao] = useState('');
   const [papelEdicao, setPapelEdicao] = useState<'funcionario' | 'admin'>('funcionario');
   const [novaSenhaEdicao, setNovaSenhaEdicao] = useState('');
+  const [erroLista, setErroLista] = useState('');
+  const [momentoCarga, setMomentoCarga] = useState(0);
+
+  function senhaFraca(valor: string): string | null {
+    if (valor.length < 8) return 'A senha deve ter pelo menos 8 caracteres.';
+    if (!/[A-Za-zÀ-ÿ]/.test(valor) || !/\d/.test(valor)) return 'A senha deve conter letras e números.';
+    return null;
+  }
+
+  function bloqueado(u: UsuarioPublico): boolean {
+    if (!u.bloqueado_ate) return false;
+    const d = new Date(u.bloqueado_ate.replace(' ', 'T') + (u.bloqueado_ate.includes('Z') ? '' : 'Z'));
+    return d.getTime() > momentoCarga;
+  }
+
+  async function patch(id: number, body: Record<string, unknown>): Promise<boolean> {
+    setErroLista('');
+    const res = await api(`/api/admin/usuarios/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setErroLista(data.error || 'Não foi possível salvar.');
+      return false;
+    }
+    return true;
+  }
 
   const carregar = useCallback(async () => {
     setCarregando(true);
-    const res = await fetch('/api/admin/usuarios');
-    if (res.ok) setLista(await res.json());
+    const res = await api('/api/admin/usuarios');
+    if (res.ok) {
+      setLista(await res.json());
+      setMomentoCarga(Date.now());
+    }
     setCarregando(false);
   }, []);
 
@@ -38,14 +72,15 @@ export default function UsuariosAdminPage() {
       setErro('Preencha usuário, nome e senha.');
       return;
     }
-    if (senha.length < 4) {
-      setErro('A senha deve ter pelo menos 4 caracteres.');
+    const problema = senhaFraca(senha);
+    if (problema) {
+      setErro(problema);
       return;
     }
 
     setSalvando(true);
     try {
-      const res = await fetch('/api/admin/usuarios', {
+      const res = await api('/api/admin/usuarios', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ login: login.trim(), nome: nome.trim(), senha, papel }),
@@ -75,23 +110,26 @@ export default function UsuariosAdminPage() {
 
   async function salvarEdicao(id: number) {
     const body: Record<string, unknown> = { nome: nomeEdicao, papel: papelEdicao };
-    if (novaSenhaEdicao) body.senha = novaSenhaEdicao;
-    await fetch(`/api/admin/usuarios/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    setEditandoId(null);
-    carregar();
+    if (novaSenhaEdicao) {
+      const problema = senhaFraca(novaSenhaEdicao);
+      if (problema) {
+        setErroLista(problema);
+        return;
+      }
+      body.senha = novaSenhaEdicao;
+    }
+    if (await patch(id, body)) {
+      setEditandoId(null);
+      carregar();
+    }
   }
 
   async function alternarAtivo(u: UsuarioPublico) {
-    await fetch(`/api/admin/usuarios/${u.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ativo: !u.ativo }),
-    });
-    carregar();
+    if (await patch(u.id, { ativo: !u.ativo })) carregar();
+  }
+
+  async function desbloquear(u: UsuarioPublico) {
+    if (await patch(u.id, { desbloquear: true })) carregar();
   }
 
   return (
@@ -165,8 +203,12 @@ export default function UsuariosAdminPage() {
             </div>
           </div>
 
+          <p className="text-xs mt-3" style={{ color: 'var(--ink-soft)' }}>
+            Senha com pelo menos 8 caracteres, letras e números. A pessoa será obrigada a criar uma senha própria no primeiro acesso.
+          </p>
+
           {erro && (
-            <p className="text-sm mt-3 rounded-lg px-3 py-2" style={{ color: 'var(--red)', background: 'var(--red-soft)' }}>
+            <p role="alert" className="text-sm mt-3 rounded-lg px-3 py-2" style={{ color: 'var(--red)', background: 'var(--red-soft)' }}>
               {erro}
             </p>
           )}
@@ -181,17 +223,24 @@ export default function UsuariosAdminPage() {
           </button>
         </form>
 
-        <div className="rounded-2xl border overflow-hidden" style={{ background: 'var(--bg-panel)', borderColor: 'var(--line)' }}>
+        {erroLista && (
+          <p role="alert" className="text-sm rounded-lg px-3 py-2" style={{ color: 'var(--red)', background: 'var(--red-soft)' }}>
+            {erroLista}
+          </p>
+        )}
+
+        <div className="rounded-2xl border overflow-x-auto" style={{ background: 'var(--bg-panel)', borderColor: 'var(--line)' }}>
           {carregando ? (
             <div className="text-center py-10 text-sm" style={{ color: 'var(--ink-soft)' }}>Carregando…</div>
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--line)' }}>
                   <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Login</th>
                   <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Nome</th>
                   <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Papel</th>
                   <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Status</th>
+                  <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Último acesso</th>
                   <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Ações</th>
                 </tr>
               </thead>
@@ -241,13 +290,23 @@ export default function UsuariosAdminPage() {
                         <span className="text-xs" style={{ color: u.ativo ? 'var(--accent)' : 'var(--ink-soft)' }}>
                           {u.ativo ? 'Ativo' : 'Desativado'}
                         </span>
+                        {bloqueado(u) && (
+                          <div className="text-xs mt-0.5" style={{ color: 'var(--red)' }}>Bloqueado por tentativas</div>
+                        )}
+                        {!!u.deve_trocar_senha && (
+                          <div className="text-xs mt-0.5" style={{ color: 'var(--amber)' }}>Aguardando troca de senha</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs font-mono whitespace-nowrap" style={{ color: 'var(--ink-soft)' }}>
+                        {formatarDataHoraBR(u.ultimo_login_em)}
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         {emEdicao ? (
                           <div className="flex flex-col gap-2 items-end">
                             <input
-                              type="text"
-                              placeholder="Nova senha (opcional)"
+                              type="password"
+                              autoComplete="new-password"
+                              placeholder="Redefinir senha (opcional)"
                               value={novaSenhaEdicao}
                               onChange={(e) => setNovaSenhaEdicao(e.target.value)}
                               className="font-mono text-xs rounded border px-2 py-1 w-40"
@@ -268,6 +327,11 @@ export default function UsuariosAdminPage() {
                           </div>
                         ) : (
                           <div className="flex gap-3 justify-end">
+                            {bloqueado(u) && (
+                              <button onClick={() => desbloquear(u)} className="text-xs font-medium" style={{ color: 'var(--accent)' }}>
+                                Desbloquear
+                              </button>
+                            )}
                             <button onClick={() => iniciarEdicao(u)} className="text-xs font-medium" style={{ color: 'var(--ink-soft)' }}>
                               Editar
                             </button>

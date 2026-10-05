@@ -1,29 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, run } from '@/lib/db-adapter';
+import { query, queryOne, run } from '@/lib/db-adapter';
 import { ensureSetoresIniciais } from '@/lib/setores';
+import { exigirSessao, rota } from '@/lib/auth';
+import { registrarAuditoria } from '@/lib/auditoria';
+import { agoraUTC } from '@/lib/tempo';
+import { lerCorpo, textoObrigatorio } from '@/lib/validacao';
 
-// GET /api/admin/setores — lista para a tela de gerenciamento (admin)
-export async function GET() {
+// GET /api/admin/setores — lista para a tela de gerenciamento (exceto excluídos)
+export const GET = rota(async (req: NextRequest) => {
+  const auth = await exigirSessao(req, ['admin']);
+  if (!auth.ok) return auth.resposta;
   await ensureSetoresIniciais();
-  const rows = await query('SELECT * FROM setores ORDER BY id ASC');
-  return NextResponse.json(rows);
-}
+  return NextResponse.json(await query('SELECT * FROM setores WHERE excluido_em IS NULL ORDER BY id ASC'));
+});
 
-// POST /api/admin/setores — criar novo setor (só admin)
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const nome = (body.nome || '').trim();
+// POST /api/admin/setores — criar setor. Se já existiu um setor excluído com o
+// mesmo nome, ele é reativado (preservando o mesmo id nas dispensações antigas).
+export const POST = rota(async (req: NextRequest) => {
+  const auth = await exigirSessao(req, ['admin']);
+  if (!auth.ok) return auth.resposta;
+  const { sessao } = auth;
+  const nome = textoObrigatorio((await lerCorpo(req)).nome, 'nome do setor', 200);
 
-  if (!nome) {
-    return NextResponse.json({ error: 'O nome do setor é obrigatório.' }, { status: 400 });
-  }
-
-  const existente = await query('SELECT id FROM setores WHERE nome = ?', [nome]);
-  if (existente.length > 0) {
+  const existente = await queryOne<{ id: number; excluido_em: string | null }>('SELECT id, excluido_em FROM setores WHERE nome = ?', [nome]);
+  let id: number;
+  if (existente && !existente.excluido_em) {
     return NextResponse.json({ error: 'Já existe um setor com esse nome.' }, { status: 409 });
+  } else if (existente) {
+    id = Number(existente.id);
+    await run('UPDATE setores SET ativo = 1, excluido_em = NULL, excluido_por_nome = NULL WHERE id = ?', [id]);
+  } else {
+    id = (await run('INSERT INTO setores (nome, ativo, criado_em) VALUES (?, 1, ?)', [nome, agoraUTC()], { returningId: true }))
+      .lastInsertRowid;
   }
 
-  const result = await run('INSERT INTO setores (nome, ativo) VALUES (?, 1)', [nome], { returningId: true });
-  const novo = await query('SELECT * FROM setores WHERE id = ?', [Number(result.lastInsertRowid)]);
-  return NextResponse.json(novo[0], { status: 201 });
-}
+  await registrarAuditoria({
+    acao: 'setor_criado',
+    usuarioId: sessao.userId,
+    usuarioLogin: sessao.login,
+    entidade: 'setor',
+    entidadeId: id,
+    detalhes: { nome, reativado: !!existente },
+    req,
+  });
+  return NextResponse.json(await queryOne('SELECT * FROM setores WHERE id = ?', [id]), { status: 201 });
+});

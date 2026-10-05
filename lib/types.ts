@@ -17,6 +17,9 @@ export interface Dispensacao {
   devolvido_por_nome: string | null;
   anestesista_devolucao_cracha: string | null;
   anestesista_devolucao_nome: string | null;
+  excluido_em: string | null;
+  excluido_por_nome: string | null;
+  motivo_exclusao: string | null;
   criado_em: string;
   atualizado_em: string;
 }
@@ -54,4 +57,19 @@ export interface UsuarioPublico {
   papel: 'admin' | 'funcionario';
   ativo: number;
   criado_em: string;
+  ultimo_login_em: string | null;
+  bloqueado_ate: string | null;
+  deve_trocar_senha: number;
+}
+
+export interface EventoAuditoria {
+  id: number;
+  ocorrido_em: string;
+  usuario_id: number | null;
+  usuario_login: string | null;
+  acao: string;
+  entidade: string | null;
+  entidade_id: string | null;
+  detalhes: string | null;
+  ip: string | null;
 }

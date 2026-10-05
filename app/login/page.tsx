@@ -9,28 +9,36 @@ export default function LoginPage() {
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(false);
+  const [aviso, setAviso] = useState('');
   const loginRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   useEffect(() => {
     loginRef.current?.focus();
+    if (new URLSearchParams(window.location.search).get('expirada') === '1') {
+      setAviso('Sua sessão foi encerrada por inatividade. Entre novamente.');
+    }
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErro('');
+    setAviso('');
     setCarregando(true);
 
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ login, senha }),
-    });
+    }).catch(() => null);
 
     setCarregando(false);
 
-    if (res.ok) {
-      router.push('/');
+    if (!res) {
+      setErro('Não foi possível conectar ao servidor. Verifique a rede e tente novamente.');
+    } else if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      router.push(data.deveTrocarSenha ? '/trocar-senha' : '/');
       router.refresh();
     } else {
       const data = await res.json().catch(() => ({}));
@@ -95,8 +103,14 @@ export default function LoginPage() {
             />
           </div>
 
+          {aviso && !erro && (
+            <p className="text-sm rounded-lg px-3 py-2" style={{ color: 'var(--amber)', background: 'var(--amber-soft)' }}>
+              {aviso}
+            </p>
+          )}
+
           {erro && (
-            <p className="text-sm rounded-lg px-3 py-2" style={{ color: 'var(--red)', background: 'var(--red-soft)' }}>
+            <p role="alert" className="text-sm rounded-lg px-3 py-2" style={{ color: 'var(--red)', background: 'var(--red-soft)' }}>
               {erro}
             </p>
           )}

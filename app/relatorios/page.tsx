@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Dispensacao } from '@/lib/types';
 import { formatarDataHoraBR, hojeLocalISO } from '@/lib/formatarData';
+import { api, useSessao } from '@/lib/useSessao';
 
 function primeiroDiaDoMes(): string {
   const d = new Date();
@@ -37,6 +38,19 @@ const CABECALHOS = [
   'Status',
 ];
 
+const CABECALHOS_EXCLUSAO = ['Excluído em', 'Excluído por', 'Motivo da exclusão'];
+
+function rotuloStatus(d: Dispensacao): string {
+  if (d.excluido_em) return 'Excluída';
+  return d.status === 'em_posse' ? 'Em posse' : 'Devolvida';
+}
+
+// Proteção contra "CSV/fórmula injection": um texto que começa com = + - @
+// seria executado como fórmula ao abrir o arquivo no Excel.
+function celulaSegura(valor: string): string {
+  return /^[=+\-@\t\r]/.test(valor) ? `'${valor}` : valor;
+}
+
 function linhaParaExportacao(d: Dispensacao): string[] {
   return [
     d.codigo_caixa,
@@ -50,8 +64,8 @@ function linhaParaExportacao(d: Dispensacao): string[] {
     formatarDataHoraBR(d.horario_devolucao),
     d.registrado_por_nome || '',
     d.devolvido_por_nome || '',
-    d.status === 'em_posse' ? 'Em posse' : 'Devolvida',
-  ];
+    rotuloStatus(d),
+  ].map(celulaSegura);
 }
 
 export default function RelatoriosPage() {
@@ -61,16 +75,19 @@ export default function RelatoriosPage() {
   const [dispensacoes, setDispensacoes] = useState<Dispensacao[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [exportandoXlsx, setExportandoXlsx] = useState(false);
+  const [incluirExcluidas, setIncluirExcluidas] = useState(false);
+  const { isAdmin } = useSessao();
 
   const carregar = useCallback(async () => {
     setCarregando(true);
     const params = new URLSearchParams();
     if (dataInicio) params.set('dataInicio', dataInicio);
     if (dataFim) params.set('dataFim', dataFim);
-    const res = await fetch(`/api/dispensacoes?${params}`);
+    if (incluirExcluidas) params.set('incluirExcluidas', '1');
+    const res = await api(`/api/dispensacoes?${params}`);
     if (res.ok) setDispensacoes(await res.json());
     setCarregando(false);
-  }, [dataInicio, dataFim]);
+  }, [dataInicio, dataFim, incluirExcluidas]);
 
   useEffect(() => {
     carregar();
@@ -94,12 +111,23 @@ export default function RelatoriosPage() {
       )
     : dispensacoes;
 
+  function tabelaExportacao(): string[][] {
+    const cabecalhos = incluirExcluidas ? [...CABECALHOS, ...CABECALHOS_EXCLUSAO] : CABECALHOS;
+    const linhas = linhasFiltradas.map((d) => {
+      const base = linhaParaExportacao(d);
+      if (!incluirExcluidas) return base;
+      return [
+        ...base,
+        ...[d.excluido_em ? formatarDataHoraBR(d.excluido_em) : '', d.excluido_por_nome || '', d.motivo_exclusao || ''].map(celulaSegura),
+      ];
+    });
+    return [cabecalhos, ...linhas];
+  }
+
   function exportarCSV() {
     if (linhasFiltradas.length === 0) return;
 
-    const linhas = linhasFiltradas.map(linhaParaExportacao);
-
-    const csvRows = [CABECALHOS, ...linhas].map((linha) =>
+    const csvRows = tabelaExportacao().map((linha) =>
       linha.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')
     );
     // BOM no início ajuda o Excel a reconhecer acentos corretamente
@@ -117,8 +145,7 @@ export default function RelatoriosPage() {
     setExportandoXlsx(true);
     try {
       const writeExcelFile = (await import('write-excel-file/browser')).default;
-      const linhas = linhasFiltradas.map(linhaParaExportacao);
-      const sheetData = [CABECALHOS, ...linhas];
+      const sheetData = tabelaExportacao();
       await writeExcelFile(sheetData).toFile(
         `relatorio-dispensacoes-${dataInicio || 'inicio'}-a-${dataFim || 'fim'}.xlsx`
       );
@@ -191,7 +218,18 @@ export default function RelatoriosPage() {
               style={{ borderColor: 'var(--line)' }}
             />
           </div>
-          <div className="flex gap-2">
+          {isAdmin && (
+            <label className="flex items-center gap-2 text-sm py-2" style={{ color: 'var(--ink-soft)' }}>
+              <input
+                type="checkbox"
+                checked={incluirExcluidas}
+                onChange={(e) => setIncluirExcluidas(e.target.checked)}
+                className="h-4 w-4"
+              />
+              Incluir registros excluídos
+            </label>
+          )}
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={exportarCSV}
               disabled={linhasFiltradas.length === 0}
@@ -241,7 +279,7 @@ export default function RelatoriosPage() {
                 <tbody>
                   {linhasFiltradas.map((d) => (
                     <tr key={d.id} style={{ borderBottom: '1px solid var(--line)' }}>
-                      <td className="px-4 py-3 font-mono">{d.codigo_caixa}</td>
+                      <td className="px-4 py-3 font-mono whitespace-nowrap">{d.codigo_caixa}</td>
                       <td className="px-4 py-3">{d.setor_nome || '—'}</td>
                       <td className="px-4 py-3 font-mono">
                         <div>{d.codigo_anestesista}</div>
@@ -288,15 +326,22 @@ export default function RelatoriosPage() {
                       </td>
                       <td className="px-4 py-3">
                         <span
-                          className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                          className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap"
                           style={
-                            d.status === 'em_posse'
-                              ? { background: 'var(--amber-soft)', color: 'var(--amber)' }
-                              : { background: 'var(--accent-soft)', color: 'var(--accent)' }
+                            d.excluido_em
+                              ? { background: 'var(--red-soft)', color: 'var(--red)' }
+                              : d.status === 'em_posse'
+                                ? { background: 'var(--amber-soft)', color: 'var(--amber)' }
+                                : { background: 'var(--accent-soft)', color: 'var(--accent)' }
                           }
                         >
-                          {d.status === 'em_posse' ? 'Em posse' : 'Devolvida'}
+                          {rotuloStatus(d)}
                         </span>
+                        {d.excluido_em && (
+                          <div className="text-xs mt-1 max-w-[220px]" style={{ color: 'var(--ink-soft)' }}>
+                            {formatarDataHoraBR(d.excluido_em)} por {d.excluido_por_nome || '—'}: {d.motivo_exclusao}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, FormEvent } from 'react';
 import { Anestesista } from '@/lib/types';
+import { api } from '@/lib/useSessao';
 
 interface SetorAtual {
   id: number;
@@ -29,7 +30,7 @@ export default function FormularioEntrega({ onSucesso, setorAtual }: Props) {
 
   useEffect(() => {
     crachaRef.current?.focus();
-    fetch('/api/anestesistas')
+    api('/api/anestesistas')
       .then((res) => (res.ok ? res.json() : []))
       .then(setAnestesistas)
       .catch(() => {});
@@ -69,7 +70,7 @@ export default function FormularioEntrega({ onSucesso, setorAtual }: Props) {
   }
 
   const recarregarAnestesistas = useCallback(() => {
-    fetch('/api/anestesistas')
+    api('/api/anestesistas')
       .then((res) => (res.ok ? res.json() : []))
       .then(setAnestesistas)
       .catch(() => {});
@@ -98,7 +99,7 @@ export default function FormularioEntrega({ onSucesso, setorAtual }: Props) {
 
     setEnviando(true);
     try {
-      const res = await fetch('/api/dispensacoes', {
+      const res = await api('/api/dispensacoes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -142,7 +143,7 @@ export default function FormularioEntrega({ onSucesso, setorAtual }: Props) {
         Registrar nova entrega {setorAtual && <span style={{ color: 'var(--accent)' }}>— {setorAtual.nome}</span>}
       </h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Campo de crachá — o "herói" da tela */}
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--ink-soft)' }}>
@@ -242,14 +243,14 @@ export default function FormularioEntrega({ onSucesso, setorAtual }: Props) {
         </p>
       )}
 
-      <div className="flex items-center justify-between mt-4">
+      <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 mt-4">
         <p className="text-xs" style={{ color: 'var(--ink-soft)' }}>
           Horário de entrega é registrado automaticamente ao confirmar.
         </p>
         <button
           type="submit"
           disabled={!podeEnviar}
-          className="rounded-lg px-5 py-2.5 font-medium text-white disabled:opacity-50 transition-opacity"
+          className="w-full sm:w-auto rounded-lg px-5 py-3 font-medium text-white disabled:opacity-50 transition-opacity"
           style={{ background: 'var(--accent)' }}
         >
           {enviando ? 'Registrando…' : 'Registrar entrega'}

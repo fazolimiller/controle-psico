@@ -1,34 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSessionToken, SESSION_COOKIE_NAME } from '@/lib/auth';
+import { gravarCookieSessao, rota } from '@/lib/auth';
 import { autenticar } from '@/lib/usuarios';
+import { registrarAuditoria } from '@/lib/auditoria';
+import { lerCorpo } from '@/lib/validacao';
 
-export async function POST(req: NextRequest) {
-  const { login, senha } = await req.json();
+export const POST = rota(async (req: NextRequest) => {
+  const corpo = await lerCorpo(req);
+  const login = typeof corpo.login === 'string' ? corpo.login.trim().slice(0, 100) : '';
+  const senha = typeof corpo.senha === 'string' ? corpo.senha.slice(0, 200) : '';
 
   if (!login || !senha) {
     return NextResponse.json({ error: 'Informe usuário e senha.' }, { status: 400 });
   }
 
-  const usuario = await autenticar(login, senha);
+  const r = await autenticar(login, senha);
 
-  if (!usuario) {
+  if (!r.ok) {
+    if (r.motivo === 'bloqueado') {
+      await registrarAuditoria({ acao: 'login_bloqueado', usuarioId: r.usuario?.id ?? null, usuarioLogin: login, req });
+      return NextResponse.json(
+        {
+          error: `Usuário bloqueado temporariamente por excesso de tentativas. Tente novamente em ${r.minutosRestantes} minuto(s) ou peça a um administrador para desbloquear.`,
+        },
+        { status: 429 }
+      );
+    }
+    await registrarAuditoria({ acao: 'login_falha', usuarioId: r.usuario?.id ?? null, usuarioLogin: login, req });
     return NextResponse.json({ error: 'Usuário ou senha incorretos.' }, { status: 401 });
   }
 
-  const token = createSessionToken({
-    userId: usuario.id,
-    login: usuario.login,
-    nome: usuario.nome,
-    papel: usuario.papel,
-  });
+  const u = r.usuario;
+  await registrarAuditoria({ acao: 'login', usuarioId: u.id, usuarioLogin: u.login, req });
 
-  const response = NextResponse.json({ ok: true, nome: usuario.nome, papel: usuario.papel });
-  response.cookies.set(SESSION_COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 60 * 60 * 12,
+  const resposta = NextResponse.json({
+    ok: true,
+    nome: u.nome,
+    papel: u.papel,
+    deveTrocarSenha: Number(u.deve_trocar_senha) === 1,
   });
-  return response;
-}
+  await gravarCookieSessao(resposta, u);
+  return resposta;
+});

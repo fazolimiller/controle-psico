@@ -1,24 +1,19 @@
-import { query, run } from './db-adapter';
+import { queryOne, run } from './db-adapter';
+import { agoraUTC } from './tempo';
 
 const SETORES_PADRAO = ['Centro Cirúrgico 1', 'Centro Cirúrgico 2', 'Hemodinâmica', 'Endoscopias'];
 
-let setoresEnsured = false;
+let setoresVerificados = false;
 
-// Garante que existam os setores padrão na primeira vez que o sistema roda —
-// mesma lógica usada para o admin inicial. Se um admin já tiver removido
-// todos os setores de propósito, não recriamos (só semeia quando a tabela
-// está vazia pela primeira vez).
+// Semeia os setores padrão somente na primeira execução (tabela vazia).
+// Setores removidos depois (exclusão lógica) continuam na tabela e não são recriados.
 export async function ensureSetoresIniciais(): Promise<void> {
-  if (setoresEnsured) return;
-
-  const existentes = await query<{ total: number }>('SELECT COUNT(*) as total FROM setores');
-  const total = Number(existentes[0]?.total ?? 0);
-
-  if (total === 0) {
+  if (setoresVerificados) return;
+  const linha = await queryOne<{ total: number }>('SELECT COUNT(*) AS total FROM setores');
+  if (Number(linha?.total ?? 0) === 0) {
     for (const nome of SETORES_PADRAO) {
-      await run('INSERT INTO setores (nome, ativo) VALUES (?, 1)', [nome]);
+      await run('INSERT INTO setores (nome, ativo, criado_em) VALUES (?, 1, ?)', [nome, agoraUTC()]);
     }
   }
-
-  setoresEnsured = true;
+  setoresVerificados = true;
 }

@@ -1,57 +1,63 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, run } from '@/lib/db-adapter';
-import { getSession } from '@/lib/auth';
+import { queryOne, run } from '@/lib/db-adapter';
+import { exigirSessao, rota } from '@/lib/auth';
+import { registrarAuditoria } from '@/lib/auditoria';
+import { agoraUTC } from '@/lib/tempo';
+import { codigo, ErroValidacao, idValido, lerCorpo } from '@/lib/validacao';
 
 // POST /api/dispensacoes/:id/devolucao — registrar devolução da caixa
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const session = await getSession();
-  const body = await req.json().catch(() => ({}));
+export const POST = rota(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  const auth = await exigirSessao(req, ['admin', 'funcionario']);
+  if (!auth.ok) return auth.resposta;
+  const { sessao } = auth;
+  const id = idValido((await params).id);
+  if (!id) throw new ErroValidacao('Identificador inválido.');
 
-  const linha = (await query<Record<string, unknown>>('SELECT * FROM dispensacoes WHERE id = ?', [id]))[0];
-
-  if (!linha) {
-    return NextResponse.json({ error: 'Registro não encontrado.' }, { status: 404 });
-  }
-
+  const linha = await queryOne<Record<string, unknown>>('SELECT * FROM dispensacoes WHERE id = ? AND excluido_em IS NULL', [id]);
+  if (!linha) return NextResponse.json({ error: 'Registro não encontrado.' }, { status: 404 });
   if (linha.horario_devolucao) {
-    return NextResponse.json({ error: 'Devolução já registrada para esta caixa.' }, { status: 400 });
+    return NextResponse.json({ error: 'Devolução já registrada para esta caixa.' }, { status: 409 });
   }
 
-  const horarioDevolucao = body.horario_devolucao || new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const corpo = await lerCorpo(req).catch(() => ({}) as Record<string, unknown>);
+  // Anestesista que devolveu: se não informado, o mesmo que retirou.
+  const crachaDevolucao =
+    corpo.anestesista_devolucao_cracha !== undefined && corpo.anestesista_devolucao_cracha !== ''
+      ? codigo(corpo.anestesista_devolucao_cracha, 'anestesista da devolução')
+      : String(linha.codigo_anestesista);
 
-  // Anestesista que devolveu a caixa. Se não for informado, assume o mesmo que
-  // a retirou (é o caso mais comum e o padrão sugerido na tela).
-  const crachaDevolucao = (body.anestesista_devolucao_cracha || linha.codigo_anestesista) as string;
-
-  const anestesista = await query<{ nome: string; ativo: number }>(
-    'SELECT nome, ativo FROM anestesistas WHERE codigo_cracha = ?',
+  const anestesista = await queryOne<{ nome: string }>(
+    'SELECT nome FROM anestesistas WHERE codigo_cracha = ? AND ativo = 1 AND excluido_em IS NULL',
     [crachaDevolucao]
   );
-
-  if (anestesista.length === 0 || !anestesista[0].ativo) {
-    return NextResponse.json(
-      { error: 'Anestesista informado para a devolução não está cadastrado ou está inativo.' },
-      { status: 422 }
-    );
+  if (!anestesista) {
+    return NextResponse.json({ error: 'Anestesista informado para a devolução não está cadastrado ou está inativo.' }, { status: 422 });
   }
 
-  await run(
+  // O horário é sempre o do servidor.
+  const agora = agoraUTC();
+  // "AND horario_devolucao IS NULL" evita registrar duas devoluções em cliques simultâneos.
+  const r = await run(
     `UPDATE dispensacoes
-     SET horario_devolucao = ?, status = 'devolvida', atualizado_em = CURRENT_TIMESTAMP,
+     SET horario_devolucao = ?, status = 'devolvida', atualizado_em = ?,
          devolvido_por_id = ?, devolvido_por_nome = ?,
          anestesista_devolucao_cracha = ?, anestesista_devolucao_nome = ?
-     WHERE id = ?`,
-    [
-      horarioDevolucao,
-      session?.userId ?? null,
-      session?.nome ?? null,
-      crachaDevolucao,
-      anestesista[0].nome,
-      id,
-    ]
+     WHERE id = ? AND horario_devolucao IS NULL AND excluido_em IS NULL`,
+    [agora, agora, sessao.userId, sessao.nome, crachaDevolucao, anestesista.nome, id]
   );
+  if (r.changes === 0) {
+    return NextResponse.json({ error: 'Devolução já registrada para esta caixa.' }, { status: 409 });
+  }
 
-  const linhaAtualizada = (await query('SELECT * FROM dispensacoes WHERE id = ?', [id]))[0];
-  return NextResponse.json(linhaAtualizada);
-}
+  await registrarAuditoria({
+    acao: 'dispensacao_devolvida',
+    usuarioId: sessao.userId,
+    usuarioLogin: sessao.login,
+    entidade: 'dispensacao',
+    entidadeId: id,
+    detalhes: { caixa: linha.codigo_caixa, anestesista_devolucao: crachaDevolucao },
+    req,
+  });
+
+  return NextResponse.json(await queryOne('SELECT * FROM dispensacoes WHERE id = ?', [id]));
+});

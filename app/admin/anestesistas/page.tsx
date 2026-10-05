@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, FormEvent } from 'react';
 import Link from 'next/link';
 import { Anestesista } from '@/lib/types';
+import { api } from '@/lib/useSessao';
 
 export default function AnestesistasAdminPage() {
   const [lista, setLista] = useState<Anestesista[]>([]);
@@ -17,10 +18,11 @@ export default function AnestesistasAdminPage() {
   const [crmEdicao, setCrmEdicao] = useState('');
   const [erroEdicao, setErroEdicao] = useState('');
   const codigoRef = useRef<HTMLInputElement>(null);
+  const [removendo, setRemovendo] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
-    const res = await fetch('/api/admin/anestesistas');
+    const res = await api('/api/admin/anestesistas');
     if (res.ok) setLista(await res.json());
     setCarregando(false);
   }, []);
@@ -40,7 +42,7 @@ export default function AnestesistasAdminPage() {
 
     setSalvando(true);
     try {
-      const res = await fetch('/api/admin/anestesistas', {
+      const res = await api('/api/admin/anestesistas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ codigo_cracha: codigo.trim(), nome: nome.trim(), crm: crm.trim() }),
@@ -74,7 +76,7 @@ export default function AnestesistasAdminPage() {
       setErroEdicao('Nome e CRM são obrigatórios.');
       return;
     }
-    const res = await fetch(`/api/admin/anestesistas/${encodeURIComponent(codigoCracha)}`, {
+    const res = await api(`/api/admin/anestesistas/${encodeURIComponent(codigoCracha)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ nome: nomeEdicao, crm: crmEdicao.trim() }),
@@ -89,7 +91,12 @@ export default function AnestesistasAdminPage() {
   }
 
   async function remover(codigoCracha: string) {
-    await fetch(`/api/admin/anestesistas/${encodeURIComponent(codigoCracha)}`, { method: 'DELETE' });
+    const res = await api(`/api/admin/anestesistas/${encodeURIComponent(codigoCracha)}`, { method: 'DELETE' });
+    setRemovendo(null);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setErro(data.error || 'Não foi possível remover.');
+    }
     carregar();
   }
 
@@ -170,7 +177,7 @@ export default function AnestesistasAdminPage() {
           </button>
         </form>
 
-        <div className="rounded-2xl border overflow-hidden" style={{ background: 'var(--bg-panel)', borderColor: 'var(--line)' }}>
+        <div className="rounded-2xl border overflow-x-auto" style={{ background: 'var(--bg-panel)', borderColor: 'var(--line)' }}>
           {carregando ? (
             <div className="text-center py-10 text-sm" style={{ color: 'var(--ink-soft)' }}>Carregando…</div>
           ) : lista.length === 0 ? (
@@ -178,7 +185,7 @@ export default function AnestesistasAdminPage() {
               Nenhum anestesista cadastrado ainda.
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[560px]">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--line)' }}>
                   <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ink-soft)' }}>Crachá</th>
@@ -241,9 +248,25 @@ export default function AnestesistasAdminPage() {
                             <button onClick={() => iniciarEdicao(a)} className="text-xs font-medium" style={{ color: 'var(--ink-soft)' }}>
                               Editar
                             </button>
-                            <button onClick={() => remover(a.codigo_cracha)} className="text-xs font-medium" style={{ color: 'var(--red)' }}>
-                              Remover
-                            </button>
+                            {removendo === a.codigo_cracha ? (
+                              <>
+                                <span className="text-xs" style={{ color: 'var(--red)' }}>Remover do cadastro?</span>
+                                <button onClick={() => setRemovendo(null)} className="text-xs" style={{ color: 'var(--ink-soft)' }}>
+                                  Cancelar
+                                </button>
+                                <button
+                                  onClick={() => remover(a.codigo_cracha)}
+                                  className="text-xs px-3 py-1 rounded font-medium text-white"
+                                  style={{ background: 'var(--red)' }}
+                                >
+                                  Confirmar
+                                </button>
+                              </>
+                            ) : (
+                              <button onClick={() => setRemovendo(a.codigo_cracha)} className="text-xs font-medium" style={{ color: 'var(--red)' }}>
+                                Remover
+                              </button>
+                            )}
                           </div>
                         )}
                       </td>

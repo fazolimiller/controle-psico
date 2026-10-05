@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import FormularioEntrega from '@/components/FormularioEntrega';
 import TabelaDispensacoes from '@/components/TabelaDispensacoes';
 import { Dispensacao, Setor } from '@/lib/types';
-import { useSessao } from '@/lib/useSessao';
+import { useSessao, api } from '@/lib/useSessao';
 import { hojeLocalISO } from '@/lib/formatarData';
 
 function formatarDataExtenso(dataISO: string): string {
@@ -28,7 +28,7 @@ export default function HomePage() {
 
   // Carrega os setores (abas) uma vez, e seleciona o primeiro por padrão
   useEffect(() => {
-    fetch('/api/setores')
+    api('/api/setores')
       .then((res) => (res.ok ? res.json() : []))
       .then((lista: Setor[]) => {
         setSetores(lista);
@@ -49,7 +49,7 @@ export default function HomePage() {
     if (filtroStatus !== 'todas') {
       params.set('status', filtroStatus);
     }
-    const res = await fetch(`/api/dispensacoes?${params}`);
+    const res = await api(`/api/dispensacoes?${params}`);
     if (res.ok) {
       setDispensacoes(await res.json());
     }
@@ -61,7 +61,7 @@ export default function HomePage() {
   }, [carregar]);
 
   async function handleLogout() {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await api('/api/auth/logout', { method: 'POST' });
     router.push('/login');
     router.refresh();
   }
@@ -76,14 +76,14 @@ export default function HomePage() {
         className="border-b sticky top-0 z-10"
         style={{ background: 'var(--bg-panel)', borderColor: 'var(--line)' }}
       >
-        <div className="max-w-6xl mx-auto px-4 md:px-6 py-4 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 md:py-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div>
             <h1 className="font-display text-xl" style={{ color: 'var(--ink)' }}>
               Controle de Psicotrópicos
             </h1>
             <p className="text-xs" style={{ color: 'var(--ink-soft)' }}>Farmácia - Santa Casa de São José dos Campos</p>
           </div>
-          <nav className="flex items-center gap-4">
+          <nav className="flex flex-wrap items-center gap-1 sm:gap-2">
             <Link
               href="/relatorios"
               className="text-sm font-medium px-3 py-1.5 rounded-lg"
@@ -101,11 +101,16 @@ export default function HomePage() {
               </Link>
             )}
             {sessao && (
-              <span className="text-sm hidden sm:inline" style={{ color: 'var(--ink-soft)' }}>
+              <Link
+                href="/trocar-senha"
+                className="text-sm px-3 py-1.5 rounded-lg"
+                style={{ color: 'var(--ink-soft)' }}
+                title="Trocar minha senha"
+              >
                 {sessao.nome}
-              </span>
+              </Link>
             )}
-            <button onClick={handleLogout} className="text-sm" style={{ color: 'var(--ink-soft)' }}>
+            <button onClick={handleLogout} className="text-sm px-3 py-1.5 rounded-lg" style={{ color: 'var(--ink-soft)' }}>
               Sair
             </button>
           </nav>
@@ -163,7 +168,7 @@ export default function HomePage() {
                   </p>
                 )}
               </div>
-              <div className="flex items-end gap-2">
+              <div className="flex flex-wrap items-end gap-2">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--ink-soft)' }}>
                     Caixas

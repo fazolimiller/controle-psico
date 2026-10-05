@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, FormEvent } from 'react';
 import Link from 'next/link';
 import { Setor } from '@/lib/types';
+import { api } from '@/lib/useSessao';
 
 export default function SetoresAdminPage() {
   const [lista, setLista] = useState<Setor[]>([]);
@@ -17,7 +18,7 @@ export default function SetoresAdminPage() {
 
   const carregar = useCallback(async () => {
     setCarregando(true);
-    const res = await fetch('/api/admin/setores');
+    const res = await api('/api/admin/setores');
     if (res.ok) setLista(await res.json());
     setCarregando(false);
   }, []);
@@ -37,7 +38,7 @@ export default function SetoresAdminPage() {
 
     setSalvando(true);
     try {
-      const res = await fetch('/api/admin/setores', {
+      const res = await api('/api/admin/setores', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nome: nome.trim() }),
@@ -62,7 +63,7 @@ export default function SetoresAdminPage() {
   }
 
   async function salvarEdicao(id: number) {
-    const res = await fetch(`/api/admin/setores/${id}`, {
+    const res = await api(`/api/admin/setores/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ nome: nomeEdicao }),
@@ -70,12 +71,19 @@ export default function SetoresAdminPage() {
     if (res.ok) {
       setEditandoId(null);
       carregar();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setErro(data.error || 'Não foi possível salvar.');
     }
   }
 
   async function remover(id: number) {
-    await fetch(`/api/admin/setores/${id}`, { method: 'DELETE' });
+    const res = await api(`/api/admin/setores/${id}`, { method: 'DELETE' });
     setConfirmandoRemocaoId(null);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setErro(data.error || 'Não foi possível remover.');
+    }
     carregar();
   }
 

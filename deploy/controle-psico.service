@@ -1,0 +1,31 @@
+# /etc/systemd/system/controle-psico.service
+# Ativar: systemctl daemon-reload && systemctl enable --now controle-psico
+[Unit]
+Description=Controle de Psicotropicos - Farmacia
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=psico
+Group=psico
+WorkingDirectory=/opt/controle-psico/app
+EnvironmentFile=/opt/controle-psico/.env
+Environment=NODE_ENV=production
+Environment=HOSTNAME=127.0.0.1
+Environment=PORT=3000
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=5
+
+# Endurecimento do serviço
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
