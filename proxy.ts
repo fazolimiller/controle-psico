@@ -19,7 +19,7 @@ const METODOS_ESCRITA = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 // Renova o cookie no máximo uma vez por minuto, para não reescrevê-lo a cada requisição.
 const INTERVALO_RENOVACAO_MS = 60_000;
 
-function politicaCSP(nonce: string, seguro: boolean): string {
+function politicaCSP(nonce: string, https: boolean): string {
   const dev = process.env.NODE_ENV === 'development';
   return [
     "default-src 'self'",
@@ -33,18 +33,20 @@ function politicaCSP(nonce: string, seguro: boolean): string {
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    ...(seguro ? ['upgrade-insecure-requests'] : []),
+    ...(https ? ['upgrade-insecure-requests'] : []),
   ].join('; ');
 }
 
-function aplicarCabecalhos(res: NextResponse, csp: string, seguro: boolean) {
+function aplicarCabecalhos(res: NextResponse, csp: string, https: boolean) {
   res.headers.set('Content-Security-Policy', csp);
   res.headers.set('X-Frame-Options', 'DENY');
   res.headers.set('X-Content-Type-Options', 'nosniff');
   res.headers.set('Referrer-Policy', 'same-origin');
   res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
   res.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-  if (seguro) res.headers.set('Strict-Transport-Security', 'max-age=31536000');
+  // HSTS só quando a requisição chegou de fato por HTTPS (nunca em http://localhost),
+  // senão o navegador passa a exigir HTTPS num endereço que só fala HTTP.
+  if (https) res.headers.set('Strict-Transport-Security', 'max-age=31536000');
   return res;
 }
 
@@ -69,14 +71,17 @@ export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const cfg = configSessao();
   const nonce = btoa(crypto.randomUUID());
-  const csp = politicaCSP(nonce, cfg.cookieSeguro);
+  // Atrás de proxy reverso (nginx/IIS/Vercel), o protocolo original vem em X-Forwarded-Proto.
+  const https =
+    req.headers.get('x-forwarded-proto')?.split(',')[0].trim() === 'https' || req.nextUrl.protocol === 'https:';
+  const csp = politicaCSP(nonce, https);
   const ehApi = pathname.startsWith('/api/');
 
   if (ehApi && METODOS_ESCRITA.has(req.method) && !origemValida(req)) {
     return aplicarCabecalhos(
       NextResponse.json({ error: 'Requisição de origem não permitida.' }, { status: 403 }),
       csp,
-      cfg.cookieSeguro
+      https
     );
   }
 
@@ -86,7 +91,7 @@ export async function proxy(req: NextRequest) {
   const seguir = () => NextResponse.next({ request: { headers: cabecalhosReq } });
 
   if (ROTAS_PUBLICAS.has(pathname) || ARQUIVO_ESTATICO.test(pathname)) {
-    return aplicarCabecalhos(seguir(), csp, cfg.cookieSeguro);
+    return aplicarCabecalhos(seguir(), csp, https);
   }
 
   const token = req.cookies.get(NOME_COOKIE_SESSAO)?.value;
@@ -102,7 +107,7 @@ export async function proxy(req: NextRequest) {
       res = NextResponse.redirect(url);
     }
     if (token) res.cookies.delete(NOME_COOKIE_SESSAO);
-    return aplicarCabecalhos(res, csp, cfg.cookieSeguro);
+    return aplicarCabecalhos(res, csp, https);
   }
 
   const { dados } = verificacao;
@@ -111,7 +116,7 @@ export async function proxy(req: NextRequest) {
     const res = ehApi
       ? NextResponse.json({ error: 'Você não tem permissão para esta ação.' }, { status: 403 })
       : NextResponse.redirect(new URL('/', req.url));
-    return aplicarCabecalhos(res, csp, cfg.cookieSeguro);
+    return aplicarCabecalhos(res, csp, https);
   }
 
   const res = seguir();
@@ -120,7 +125,7 @@ export async function proxy(req: NextRequest) {
     const novo = await assinarToken({ ...dados, atv: agora }, segredoSessao());
     res.cookies.set(NOME_COOKIE_SESSAO, novo, opcoesCookie(cfg.cookieSeguro, cfg.duracaoMaximaHoras));
   }
-  return aplicarCabecalhos(res, csp, cfg.cookieSeguro);
+  return aplicarCabecalhos(res, csp, https);
 }
 
 export const config = {
